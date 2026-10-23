@@ -1,5 +1,6 @@
 // Startet alle Tests in Node: npm test
 import './engine.test.js';
+import './validate.test.js';
 import { alleTestsAusfuehren } from './runner.js';
 
 const ergebnisse = await alleTestsAusfuehren();

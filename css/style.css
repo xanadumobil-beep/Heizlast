@@ -1,0 +1,175 @@
+:root {
+  --bg: #f4f3ef;
+  --flaeche: #ffffff;
+  --text: #1c1c1a;
+  --text-leise: #5d5c57;
+  --linie: #d8d6cf;
+  --akzent: #0b5cad;
+  --akzent-text: #ffffff;
+  --ok: #17703a;
+  --warnung: #8a5a00;
+  --warnung-bg: #fff4d6;
+  --fehler: #b3261e;
+  --fehler-bg: #fde8e6;
+  --radius: 12px;
+  --ziel: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --flaeche: #21211f;
+    --text: #ecebe6;
+    --text-leise: #a9a79f;
+    --linie: #3a3a37;
+    --akzent: #6cb2f5;
+    --akzent-text: #0b1a2a;
+    --ok: #6fd08c;
+    --warnung: #f0c05a;
+    --warnung-bg: #3a2f10;
+    --fehler: #ff8a80;
+    --fehler-bg: #3d1a17;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-text-size-adjust: 100%;
+}
+
+.kopfleiste {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--flaeche);
+  border-bottom: 1px solid var(--linie);
+  padding: 8px 16px 0;
+}
+
+.kopfleiste h1 { margin: 0 0 4px; font-size: 1.15rem; }
+
+nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+nav a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ziel);
+  padding: 0 16px;
+  color: var(--text-leise);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+
+nav a[aria-current] { color: var(--akzent); border-bottom-color: var(--akzent); font-weight: 600; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+
+h2 { margin: 0; font-size: 1.4rem; }
+h3 { margin: 0 0 6px; font-size: 1.1rem; }
+
+.kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.beschreibung, .leer { color: var(--text-leise); margin: 8px 0 16px; max-width: 70ch; }
+
+/* Knöpfe */
+button {
+  min-height: var(--ziel);
+  padding: 0 18px;
+  font: inherit;
+  color: var(--text);
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: var(--radius);
+  touch-action: manipulation;
+}
+button.primaer { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); font-weight: 600; }
+button.gefahr { color: var(--fehler); }
+button:active { filter: brightness(0.92); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--akzent);
+  outline-offset: 2px;
+}
+
+.knopfzeile { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
+/* Karten */
+.karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.karte {
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.karte.markiert { border-color: var(--warnung); }
+.zeile { margin: 2px 0; color: var(--text-leise); white-space: pre-line; }
+.marke { margin-left: 8px; padding: 2px 8px; font-size: 0.8rem; font-weight: 600; color: var(--warnung); background: var(--warnung-bg); border-radius: 999px; }
+.ok { color: var(--ok); font-weight: 600; }
+.speicher { margin-top: 20px; max-width: 700px; }
+
+/* Formulare */
+.formular { display: grid; gap: 14px; max-width: 700px; }
+.feld { display: grid; gap: 4px; }
+.feld.inline { grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
+.feld.inline .beschriftung { order: 2; }
+.feld.inline > :not(.beschriftung):not(input) { grid-column: 1 / -1; }
+.beschriftung { font-weight: 600; }
+.klein { font-size: 0.85rem; color: var(--text-leise); }
+.hinweis { font-size: 0.9rem; color: var(--text-leise); }
+
+input[type="text"], select, textarea {
+  width: 100%;
+  min-height: var(--ziel);
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--linie);
+  border-radius: 10px;
+}
+input[type="checkbox"] { width: 28px; height: 28px; }
+textarea { resize: vertical; }
+
+.bereich { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bereich label { display: grid; gap: 2px; }
+.mit-einheit { display: flex; align-items: center; gap: 8px; }
+.einheit { color: var(--text-leise); white-space: nowrap; font-size: 0.9rem; }
+
+.hat-fehler input, .hat-fehler select, .hat-fehler textarea { border-color: var(--fehler); border-width: 2px; }
+.hat-warnung input, .hat-warnung select, .hat-warnung textarea { border-color: var(--warnung); border-width: 2px; }
+
+.meldung { margin: 4px 0 0; padding: 6px 10px; border-radius: 8px; font-size: 0.95rem; }
+.meldung.fehler { color: var(--fehler); background: var(--fehler-bg); }
+.meldung.warnung { color: var(--warnung); background: var(--warnung-bg); }
+
+/* Dialog */
+dialog.bearbeiten {
+  width: min(720px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  padding: 20px;
+  color: var(--text);
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: 16px;
+  overflow-y: auto;
+}
+dialog.bearbeiten::backdrop { background: rgba(0, 0, 0, 0.45); }
+dialog.bearbeiten h2 { margin-bottom: 14px; }
+dialog .knopfzeile { justify-content: flex-end; position: sticky; bottom: -20px; background: var(--flaeche); padding: 12px 0 4px; }
+
+@media (max-width: 520px) {
+  main { padding: 12px; }
+  .bereich { grid-template-columns: 1fr; }
+}

@@ -11,6 +11,12 @@ export function parseDezimal(text) {
   return Number(bereinigt);
 }
 
+// Zahl als Text für ein Eingabefeld: 0.15 wird zu "0,15", ohne feste Nachkommastellen.
+export function zahlZuText(wert) {
+  if (wert === null || wert === undefined || Number.isNaN(wert)) return '';
+  return String(wert).replace('.', ',');
+}
+
 export function formatZahl(wert, nachkommastellen = 1) {
   if (wert === null || wert === undefined || Number.isNaN(wert)) return '–';
   return wert.toFixed(nachkommastellen).replace('.', ',');
