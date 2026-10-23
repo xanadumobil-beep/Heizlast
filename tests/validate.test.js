@@ -195,3 +195,49 @@ test('Heizkörper: ungewöhnliche Werte werden markiert', () => {
   wahr(hatWarnungen(validiereHeizkoerper(hk({ normleistung: 20000 }), hkOptionen)), 'Normleistung 20 kW');
   wahr(hatFehler(validiereHeizkoerper(hk({ bauhoehe: 0 }), hkOptionen)), 'Bauhöhe 0');
 });
+
+// --- Normbedingungen: Pflicht, keine Vorbelegung, Schnellwahl ---------------------------
+
+import { neuerHeizkoerper, NORM_SCHNELLWAHL, normWahlVon, heizkoerperFelder } from '../js/schemas.js';
+
+test('Neuer Heizkörper hat keine vorbelegten Normbedingungen und keine Leistung', () => {
+  const neu = neuerHeizkoerper('raum');
+  wahr(neu.normVorlauf === null && neu.normRuecklauf === null && neu.normRaum === null, 'Normbedingungen leer');
+  wahr(neu.normleistung === null && neu.leistungJeGlied === null, 'keine Leistung vorbelegt');
+  wahr(normWahlVon(neu) === '', 'keine Schnellwahl vorausgewählt');
+});
+
+test('Schnellwahl bietet 75/65/20, 70/55/20, 55/45/20, 90/70/20 und eigene Werte, ohne Vorauswahl', () => {
+  wahr(NORM_SCHNELLWAHL.map((o) => o.wert).join('|') === '|75/65/20|70/55/20|55/45/20|90/70/20|eigen', 'Optionen und Reihenfolge');
+  const feld = heizkoerperFelder().find((f) => f.key === 'normWahl');
+  wahr(feld.fuellt.join() === 'normVorlauf,normRuecklauf,normRaum', 'füllt Vorlauf, Rücklauf und Raumtemperatur');
+});
+
+test('Gespeicherte Normbedingungen werden der Schnellwahl zugeordnet', () => {
+  const mit = (v, r, ra) => normWahlVon({ normVorlauf: v, normRuecklauf: r, normRaum: ra });
+  wahr(mit(55, 45, 20) === '55/45/20', '55/45/20');
+  wahr(mit(90, 70, 20) === '90/70/20', '90/70/20');
+  wahr(mit(60, 50, 20) === 'eigen', 'eigene Werte');
+  wahr(mit(55, null, null) === 'eigen', 'unvollständig gilt als eigene Werte');
+  wahr(mit(null, null, null) === '', 'leer');
+});
+
+test('Normbedingungen sind Pflicht: leer ergibt genau einen Fehler an der Schnellwahl', () => {
+  const ohne = hk({ normVorlauf: null, normRuecklauf: null, normRaum: null });
+  const meldungen = validiereHeizkoerper(ohne, hkOptionen);
+  wahr(hatFehler(meldungen), 'Fehler erwartet');
+  wahr(meldungen.filter((m) => m.stufe === 'fehler').length === 1, 'eine gebündelte Meldung statt drei einzelner');
+  wahr(feldMeldung(meldungen, 'normWahl', 'fehler'), 'Meldung hängt an der Schnellwahl');
+});
+
+test('Gliederheizkörper braucht dieselben Pflichtfelder für die Bedingungen', () => {
+  const glieder = (extra) => hk({ bauart: 'glieder', normleistung: null, leistungJeGlied: 80, gliederzahl: 10, ...extra });
+  wahr(!hatFehler(validiereHeizkoerper(glieder({ normVorlauf: 90, normRuecklauf: 70, normRaum: 20 }), hkOptionen)), '90/70/20 ist gültig');
+  wahr(hatFehler(validiereHeizkoerper(glieder({ normVorlauf: null, normRuecklauf: null, normRaum: null }), hkOptionen)), 'ohne Bedingungen blockiert');
+  wahr(hatFehler(validiereHeizkoerper(glieder({ normRuecklauf: null }), hkOptionen)), 'teilweise leer blockiert');
+});
+
+test('Wärmepumpen-Heizkörper braucht keine Normbedingungen', () => {
+  const wp = hk({ bauart: 'wp', normleistung: null, kennlinieText: '35 600\n45 1000', normVorlauf: null, normRuecklauf: null, normRaum: null });
+  wahr(validiereHeizkoerper(wp, hkOptionen).length === 0, 'Kennlinie genügt');
+});

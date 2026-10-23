@@ -58,7 +58,7 @@ function baueFeld(feld, wert, beiAenderung) {
   switch (feld.typ) {
     case 'text': {
       const eingabe = textfeld(wert ?? '', beiAenderung, false);
-      return { eingabe: eingabe, lies: () => eingabe.value.trim() };
+      return { eingabe, lies: () => eingabe.value.trim(), setze: (w) => { eingabe.value = w ?? ''; } };
     }
     case 'notiz': {
       const eingabe = el('textarea', { rows: 4, onInput: beiAenderung });
@@ -67,7 +67,11 @@ function baueFeld(feld, wert, beiAenderung) {
     }
     case 'zahl': {
       const eingabe = textfeld(zahlZuText(wert), beiAenderung, true);
-      return { eingabe: mitEinheit(eingabe, feld.einheit), lies: () => parseDezimal(eingabe.value) };
+      return {
+        eingabe: mitEinheit(eingabe, feld.einheit),
+        lies: () => parseDezimal(eingabe.value),
+        setze: (w) => { eingabe.value = zahlZuText(w); },
+      };
     }
     case 'bereich': {
       const min = textfeld(zahlZuText(wert?.min), beiAenderung, true);
@@ -90,7 +94,7 @@ function baueFeld(feld, wert, beiAenderung) {
         feld.optionen.map((o) => el('option', { value: o.wert }, o.label)),
       );
       eingabe.value = wert;
-      return { eingabe, lies: () => eingabe.value };
+      return { eingabe, lies: () => eingabe.value, setze: (w) => { eingabe.value = w; } };
     }
     case 'schalter': {
       const eingabe = el('input', { type: 'checkbox', onChange: beiAenderung });
@@ -112,6 +116,10 @@ function baueFeld(feld, wert, beiAenderung) {
 //   sichtbarWenn: { feld: 'angrenzendWahl', praefix: 'raum:' } Wert beginnt mit
 //   sichtbarWenn: { feld: 'bauart', in: ['platten', 'glieder'] } Wert ist einer von
 // Ausgeblendete Felder behalten ihren Wert, die Prüfregeln entscheiden, ob er zählt.
+//
+// Schnellwahl: Eine Auswahl mit fuellt: ['a', 'b', 'c'] und Werten wie "75/65/20" trägt die Zahlen in die
+// genannten Felder ein. Ändert man eines dieser Felder von Hand, springt die Auswahl auf den passenden
+// Eintrag, auf "eigen" oder, wenn alle Felder leer sind, auf "" zurück. Es gibt keine Vorauswahl.
 export function baueFormular(felder, werte, beiAenderung = () => {}) {
   const wurzel = el('div', { class: 'formular' });
   const allgemein = el('div', { class: 'meldungen allgemein', 'aria-live': 'polite' });
@@ -120,6 +128,30 @@ export function baueFormular(felder, werte, beiAenderung = () => {}) {
   const geaendert = () => {
     aktualisiereSichtbarkeit();
     beiAenderung();
+  };
+
+  const eintragVon = (key) => eintraege.find((e) => e.feld.key === key);
+
+  function schnellwahlFuellen(auswahl) {
+    const zahlen = String(auswahl.lies()).split('/').map(Number);
+    if (zahlen.length !== auswahl.feld.fuellt.length || !zahlen.every(Number.isFinite)) return;
+    auswahl.feld.fuellt.forEach((key, i) => eintragVon(key).setze(zahlen[i]));
+  }
+
+  function schnellwahlNachfuehren(key) {
+    for (const auswahl of eintraege.filter((e) => e.feld.fuellt?.includes(key))) {
+      const zahlen = auswahl.feld.fuellt.map((k) => eintragVon(k).lies());
+      const text = zahlen.join('/');
+      const treffer = auswahl.feld.optionen.some((o) => o.wert === text);
+      const etwasEingetragen = zahlen.some((z) => z !== null);
+      auswahl.setze(treffer ? text : etwasEingetragen ? 'eigen' : '');
+    }
+  }
+
+  const feldGeaendert = (feld) => () => {
+    if (feld.fuellt) schnellwahlFuellen(eintragVon(feld.key));
+    else schnellwahlNachfuehren(feld.key);
+    geaendert();
   };
 
   function leseAlle() {
@@ -144,7 +176,7 @@ export function baueFormular(felder, werte, beiAenderung = () => {}) {
 
   wurzel.append(allgemein);
   for (const feld of felder) {
-    const { eingabe, lies, inline, abschnitt } = baueFeld(feld, holeWert(werte, feld.key), geaendert);
+    const { eingabe, lies, setze, inline, abschnitt } = baueFeld(feld, holeWert(werte, feld.key), feldGeaendert(feld));
     const meldungen = el('div', { class: 'meldungen', 'aria-live': 'polite' });
     let zeile;
     if (abschnitt) {
@@ -159,7 +191,7 @@ export function baueFormular(felder, werte, beiAenderung = () => {}) {
       );
     }
     wurzel.append(zeile);
-    eintraege.push({ feld, lies, zeile, meldungen });
+    eintraege.push({ feld, lies, setze, zeile, meldungen });
   }
   aktualisiereSichtbarkeit();
 

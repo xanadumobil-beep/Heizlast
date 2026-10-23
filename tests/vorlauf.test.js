@@ -305,3 +305,30 @@ test('Hinweise: altes Ventil und abweichende Bezugstemperatur beim Wärmepumpen-
   //   Summe 1313,1 W
   gleich(zeile.installiert, 313.1 + 1000, 0.1, 'Leistung unverändert durch das Ventil');
 });
+
+// --- Normbedingungen bestimmen die Leistung: 787 W bei 55/45/20 gegen 787 W bei 75/65/20 ------
+//
+// Betriebsbedingung 55/45/20: ΔT_log = (55 − 45) / ln((55 − 20) / (45 − 20)) = 10 / ln(35/25) = 10 / 0,33647 = 29,720 K
+//
+// Heizkörper A: 787 W bei 55/45/20. Die Betriebsbedingung ist die Normbedingung, das Verhältnis ist 1:
+//   Φ = 787 · 1^1,3 = 787 W
+//
+// Heizkörper B: 787 W bei 75/65/20. ΔT_log,n = 10 / ln(55/45) = 10 / 0,20067 = 49,833 K
+//   Verhältnis 29,720 / 49,833 = 0,5964, hoch 1,3 ergibt 0,5107
+//   Φ = 787 · 0,5107 = 401,9 W, also nur 51 % von A
+//
+// Eine übersehene Vorbelegung 75/65/20 würde die Leistung bei 55/45 also etwa halbieren.
+test('787 W bei 55/45/20 liefert bei 55/45/20 genau 787 W, bei 75/65/20 nur 401,9 W', () => {
+  const bedingung = { tV: 55, tR: 45, ti: 20 };
+  const a = standard('a', { phiN: 787, norm: { tV: 55, tR: 45, ti: 20 } });
+  const b = standard('b', { phiN: 787, norm: { tV: 75, tR: 65, ti: 20 } });
+  gleich(heizkoerperLeistung(a, bedingung).leistung, 787, 1e-9, 'A bei 55/45/20');
+  const leistungB = heizkoerperLeistung(b, bedingung).leistung;
+  gleich(leistungB, 401.95, 0.05, 'B bei 55/45/20');
+  wahr(leistungB < 787 * 0.52, 'B leistet deutlich weniger, etwa die Hälfte');
+});
+
+test('Heizkörper ohne Normbedingungen: Leistung fehlt, auch wenn eine Normleistung eingetragen ist', () => {
+  const ohne = standard('x', { phiN: 787, norm: { tV: null, tR: null, ti: null } });
+  wahr(heizkoerperLeistung(ohne, { tV: 55, tR: 45, ti: 20 }).art === 'fehlt', 'ohne Bedingungen gilt die Leistung als fehlend');
+});

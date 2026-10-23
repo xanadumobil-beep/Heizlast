@@ -242,9 +242,18 @@ export function validiereHeizkoerper(h, { bauarten, stati, ventile }) {
     ...optional('exponent', h.exponent, { name: 'Heizkörperexponent', fehlerWennKleinerGleich: 0, warnWennUeber: 1.6, warnWennUnter: 1 }),
   );
 
-  // Normbedingungen: Vorlauf über Rücklauf über Raumtemperatur.
-  for (const [feld, name] of [['normVorlauf', 'Vorlauf'], ['normRuecklauf', 'Rücklauf'], ['normRaum', 'Raumtemperatur']]) {
-    meldungen.push(...zahl(feld, h[feld], { name: `Normbedingung ${name}`, einheit: '°C', warnWennUeber: 100, warnWennUnter: 0 }));
+  // Normbedingungen sind Pflicht und nicht vorbelegt: die Leistung hängt stark davon ab (dieselbe Zahl
+  // bei 75/65/20 statt 55/45/20 wäre rund doppelt so viel). Vorlauf über Rücklauf über Raumtemperatur.
+  const bedingungen = [['normVorlauf', 'Vorlauf'], ['normRuecklauf', 'Rücklauf'], ['normRaum', 'Raumtemperatur']];
+  if (bedingungen.every(([feld]) => h[feld] === null || h[feld] === undefined)) {
+    meldungen.push(fehler(
+      'normWahl',
+      'Normbedingungen: bitte eine Schnellwahl treffen oder eigene Werte eintragen. Sie sind nicht vorbelegt, weil die Leistung stark davon abhängt.',
+    ));
+  } else {
+    for (const [feld, name] of bedingungen) {
+      meldungen.push(...zahl(feld, h[feld], { name: `Normbedingung ${name}`, einheit: '°C', warnWennUeber: 100, warnWennUnter: 0 }));
+    }
   }
   if ([h.normVorlauf, h.normRuecklauf, h.normRaum].every(istZahl) && !(h.normVorlauf > h.normRuecklauf && h.normRuecklauf > h.normRaum)) {
     meldungen.push(fehler('normRuecklauf', 'Normbedingungen: der Vorlauf muss über dem Rücklauf liegen und der Rücklauf über der Raumtemperatur.'));

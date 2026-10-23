@@ -8,7 +8,7 @@ import { sortierteKennlinie } from '../engine/radiator.js';
 import { validiereHeizkoerper } from '../validate.js';
 import { parseKennlinie, kennlinieZuText, normleistungVon } from '../modell.js';
 import {
-  BAUARTEN_HK, HK_STATI, VENTILE, HK_TYPEN, MATERIALIEN, werte, label, neuerHeizkoerper, heizkoerperFelder,
+  BAUARTEN_HK, HK_STATI, VENTILE, HK_TYPEN, MATERIALIEN, werte, label, neuerHeizkoerper, heizkoerperFelder, normWahlVon,
 } from '../schemas.js';
 
 const OPTIONEN = { bauarten: werte(BAUARTEN_HK), stati: werte(HK_STATI), ventile: werte(VENTILE) };
@@ -44,10 +44,10 @@ export function bearbeiteHeizkoerper(raum, heizkoerper, neuLaden) {
   oeffneDialog({
     titel: istNeu ? `Heizkörper in „${raum.name}“` : 'Heizkörper bearbeiten',
     felder: heizkoerperFelder(),
-    werteVorgabe: { ...heizkoerper, kennlinieText: kennlinieZuText(heizkoerper.kennlinie) },
+    werteVorgabe: { ...heizkoerper, kennlinieText: kennlinieZuText(heizkoerper.kennlinie), normWahl: normWahlVon(heizkoerper) },
     validiere: (gelesen) => validiereHeizkoerper(gelesen, OPTIONEN),
     speichern: async (gelesen) => {
-      const { kennlinieText, ...rest } = gelesen;
+      const { kennlinieText, normWahl, ...rest } = gelesen;
       await db.speichere('radiators', {
         ...rest, raumId: raum.id, kennlinie: parseKennlinie(kennlinieText).paare, id: rest.id ?? db.neueId(),
       });

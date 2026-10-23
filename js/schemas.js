@@ -303,16 +303,37 @@ export const HK_STATI = [
   { wert: 'geplant', label: 'Geplant' },
 ];
 
-// Die Normbedingungen sind mit dem häufigsten Wert 75/65/20 vorbelegt und sichtbar änderbar.
-// Eine Leistung wird nie vorbelegt: fehlt sie, gilt der Heizkörper als "Leistung fehlt".
+// Weder Leistung noch Normbedingungen werden vorbelegt. Die Leistung hängt stark von den Bedingungen ab
+// (dieselbe Leistung bei 75/65/20 statt 55/45/20 wäre rund doppelt so hoch), also müssen sie bewusst
+// gewählt werden. Fehlt die Leistung, gilt der Heizkörper als "Leistung fehlt".
 export function neuerHeizkoerper(raumId) {
   return {
     raumId, bauart: 'platten', typ: '', status: 'bleibt', material: '', ventil: 'neu',
     bauhoehe: null, baulaenge: null, bautiefe: null, nabenabstand: null,
     gliederzahl: null, leistungJeGlied: null, normleistung: null,
-    normVorlauf: 75, normRuecklauf: 65, normRaum: 20, exponent: null,
+    normVorlauf: null, normRuecklauf: null, normRaum: null, exponent: null,
     kennlinie: [], kennlinieText: '', kennlinieRaumtemperatur: 20, notiz: '',
   };
+}
+
+// Schnellwahlen für die Normbedingungen (Vorlauf/Rücklauf/Raumtemperatur). Die Auswahl hat keine Vorauswahl.
+export const NORM_SCHNELLWAHL = [
+  { wert: '', label: '– bitte wählen –' },
+  { wert: '75/65/20', label: '75/65/20' },
+  { wert: '70/55/20', label: '70/55/20' },
+  { wert: '55/45/20', label: '55/45/20' },
+  { wert: '90/70/20', label: '90/70/20' },
+  { wert: 'eigen', label: 'eigene Werte' },
+];
+
+// Auswahlwert zu gespeicherten Normbedingungen: passende Schnellwahl, "eigen" oder nichts.
+export function normWahlVon(h) {
+  const zahlen = [h.normVorlauf, h.normRuecklauf, h.normRaum];
+  if (zahlen.every((z) => typeof z === 'number')) {
+    const text = zahlen.join('/');
+    return NORM_SCHNELLWAHL.some((o) => o.wert === text) ? text : 'eigen';
+  }
+  return zahlen.some((z) => typeof z === 'number') ? 'eigen' : '';
 }
 
 const keinWp = { feld: 'bauart', in: ['platten', 'glieder', 'handtuch', 'sonstige'] };
@@ -333,14 +354,21 @@ export function heizkoerperFelder() {
     { key: 'gliederzahl', label: 'Gliederzahl', typ: 'zahl', sichtbarWenn: { feld: 'bauart', in: ['glieder'] } },
     {
       key: 'leistungJeGlied', label: 'Leistung je Glied', typ: 'zahl', einheit: 'W', sichtbarWenn: { feld: 'bauart', in: ['glieder'] },
-      hinweis: 'Bei den Normbedingungen unten. Gilt nur, wenn keine Normleistung eingetragen ist.',
+      hinweis: 'Bezogen auf die Normbedingungen unten (Pflichtangabe). Gilt nur, wenn keine Normleistung eingetragen ist.',
     },
     {
       key: 'normleistung', label: 'Normleistung', typ: 'zahl', einheit: 'W', sichtbarWenn: keinWp,
       hinweis: 'Laut Typenschild oder Datenblatt bei den Normbedingungen. Leer lassen, wenn sie unbekannt ist: '
         + 'der Heizkörper gilt dann als „Leistung fehlt“.',
     },
-    { key: 'normVorlauf', label: 'Normbedingung: Vorlauf', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp, hinweis: 'Zum Beispiel 75/65/20 oder 55/45/20.' },
+    {
+      key: 'normWahl', label: 'Normbedingungen (Vorlauf/Rücklauf/Raumtemperatur)', typ: 'auswahl', optionen: NORM_SCHNELLWAHL,
+      fuellt: ['normVorlauf', 'normRuecklauf', 'normRaum'], sichtbarWenn: keinWp,
+      hinweis: 'Pflichtangabe ohne Vorauswahl. Es sind die Bedingungen, auf die sich die Normleistung und bei Gliederheizkörpern '
+        + 'die Leistung je Glied beziehen (Datenblatt, Typenschild, Tabelle). Ältere Tabellen nennen oft 90/70/20. '
+        + 'Eine falsche Wahl verfälscht die Leistung stark.',
+    },
+    { key: 'normVorlauf', label: 'Normbedingung: Vorlauf', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp },
     { key: 'normRuecklauf', label: 'Normbedingung: Rücklauf', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp },
     { key: 'normRaum', label: 'Normbedingung: Raumtemperatur', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp },
     {
