@@ -7,6 +7,7 @@
 
 export const LUEFTUNGS_FAKTOR = 0.34; // Wh/(m³K)
 export const FAELLE = ['guenstig', 'ungunstig'];
+export const GEGENPROBE_TOLERANZ_W = 1; // ab dieser Abweichung zeigt die App eine Warnung
 
 // Eine Rechnung läuft je Fall. Günstig heißt: wenig Verlust.
 // U-Wert, ΔU_WB und Luftwechsel nehmen dafür den Minimalwert, die Zonentemperatur den Maximalwert.
@@ -55,19 +56,24 @@ function flaechenVerlust(raum, flaeche, ctx, fall) {
   };
 }
 
+function lueftungsVerlust(raum, ctx, fall) {
+  const { kante } = seiten(fall);
+  const luftwechsel = raum.luftwechsel?.[kante] ?? ctx.einstellungen.luftwechselStandard[kante];
+  return LUEFTUNGS_FAKTOR * luftwechsel * raum.volumen * (raum.theta - ctx.einstellungen.thetaAussen);
+}
+
+function aufheizZuschlag(raum, ctx) {
+  const { aktiv, wProM2 } = ctx.einstellungen.aufheizzuschlag;
+  return aktiv ? wProM2 * raum.flaeche : 0;
+}
+
 // Alle Verluste eines Raums im Fall, noch ohne Zurechnung passiver Räume.
 function raumVerluste(raum, ctx, fall) {
-  const { kante } = seiten(fall);
   const huelle = (raum.flaechen ?? []).map((f) => flaechenVerlust(raum, f, ctx, fall));
   const wand = summe(huelle.map((h) => h.wand));
   const oeffnungen = summe(huelle.map((h) => h.oeffnungen));
-
-  const luftwechsel = raum.luftwechsel?.[kante] ?? ctx.einstellungen.luftwechselStandard[kante];
-  const lueftung = LUEFTUNGS_FAKTOR * luftwechsel * raum.volumen * (raum.theta - ctx.einstellungen.thetaAussen);
-
-  const aufheizung = ctx.einstellungen.aufheizzuschlag.aktiv
-    ? ctx.einstellungen.aufheizzuschlag.wProM2 * raum.flaeche
-    : 0;
+  const lueftung = lueftungsVerlust(raum, ctx, fall);
+  const aufheizung = aufheizZuschlag(raum, ctx);
 
   return {
     wand,
@@ -76,6 +82,23 @@ function raumVerluste(raum, ctx, fall) {
     aufheizung,
     netto: wand + oeffnungen + lueftung + aufheizung,
   };
+}
+
+// Gebäudesumme direkt über alle Flächen an Außenluft, Erdreich, Nachbar und unbeheizte Zonen
+// (beheizte und passive Räume) plus Lüftung. Sie hängt nicht von der Verteilung
+// passiver Räume ab und dient als Maßstab für die Gegenprobe.
+function gebaeudeSummeDirekt(rechenbare, ctx, fall) {
+  const huelle = summe(
+    rechenbare.flatMap((raum) =>
+      (raum.flaechen ?? []).map((f) => {
+        const v = flaechenVerlust(raum, f, ctx, fall);
+        return v.wand + v.oeffnungen;
+      }),
+    ),
+  );
+  const lueftung = summe(rechenbare.map((r) => lueftungsVerlust(r, ctx, fall)));
+  const aufheizung = summe(rechenbare.map((r) => aufheizZuschlag(r, ctx)));
+  return { huelle, lueftung, aufheizung, summe: huelle + lueftung + aufheizung };
 }
 
 // Ein Fall (günstig oder ungünstig) über alle gerechneten Räume.
@@ -120,12 +143,18 @@ function berechneFall(rechenbare, ctx, fall) {
     ]),
   );
 
+  // Gegenprobe: Summe der Raumheizlasten beheizter Räume (mit zugerechneten Anteilen
+  // passiver Räume) gegen die direkt berechnete Gebäudesumme.
+  const direkt = gebaeudeSummeDirekt(rechenbare, ctx, fall);
+  const raumSumme = summe([...heizlast.values()]);
+  const differenz = direkt.summe - raumSumme;
+  if (Math.abs(differenz) > GEGENPROBE_TOLERANZ_W) {
+    warnungen.push({ art: 'gegenprobe', fall, differenz });
+  }
+
   return {
     raeume,
-    gebaeude: {
-      summe: summe(rechenbare.map((r) => eigen.get(r.id).netto)),
-      heizlast: summe([...heizlast.values()]),
-    },
+    gebaeude: { ...direkt, heizlast: raumSumme, differenz },
     warnungen,
   };
 }
@@ -151,6 +180,11 @@ function berechneFall(rechenbare, ctx, fall) {
 // }]
 //
 // Unbeheizte Räume werden nicht gerechnet. Ihre Wirkung läuft über die Zone "unbeheizt".
+//
+// Gebäude je Fall:
+//   summe     direkt aus allen Flächen an Außenluft, Erdreich, Nachbar, unbeheizten Zonen + Lüftung
+//   heizlast  Summe der Raumheizlasten beheizter Räume inkl. zugerechneter Anteile passiver Räume
+//   differenz summe − heizlast; über 1 W entsteht die Warnung { art: 'gegenprobe', fall, differenz }
 export function berechneGebaeude({ einstellungen, zonen = [], raeume }) {
   const ctx = {
     einstellungen,
@@ -179,8 +213,17 @@ export function berechneGebaeude({ einstellungen, zonen = [], raeume }) {
     gebaeude: {
       guenstig: g,
       ungunstig: u,
-      mittel: { summe: (g.summe + u.summe) / 2, heizlast: (g.heizlast + u.heizlast) / 2 },
+      mittel: {
+        summe: (g.summe + u.summe) / 2,
+        heizlast: (g.heizlast + u.heizlast) / 2,
+        differenz: (g.differenz + u.differenz) / 2,
+      },
     },
-    warnungen: faelle.guenstig.warnungen,
+    // Verteilungswarnungen sind in beiden Fällen gleich und kommen nur einmal.
+    // Die Gegenprobe gilt je Fall und kommt aus beiden.
+    warnungen: [
+      ...faelle.guenstig.warnungen,
+      ...faelle.ungunstig.warnungen.filter((w) => w.art === 'gegenprobe'),
+    ],
   };
 }

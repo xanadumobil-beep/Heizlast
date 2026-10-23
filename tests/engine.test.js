@@ -158,39 +158,45 @@ test('Bandbreite: Luftwechsel 0,5 bis 1,0', () => {
 
 // --- Beispiel D: zwei beheizte Räume, passiver Raum, unbeheizte Zone ----------
 //
-// Einstellungen: θ_e = −8, ΔU_WB = 0,10, f_g = 1, n = 0,5.
-// Zonen: unbeheizter Keller 5 °C, Erdreich 10 °C.
+// Gemeinsame Eingaben (günstig und ungünstig sind gleich, weil überall Min = Max):
+//   θ_e = −8 °C, ΔU_WB = 0,10 W/(m²K), f_g = 1, Luftwechsel n = 0,5 h⁻¹, Aufheizzuschlag aus
+//   Zone "Keller" (unbeheizt): 5 °C, Zone "Erdreich": 10 °C
 //
-// B1 (beheizt, θ = 20, V = 40):
-//   Außenwand 10 m², U = 1,0: 10 · 1,1 · 28 = 308,00 W
-//   Lüftung: 0,34 · 0,5 · 40 · 28 = 190,40 W
-//   Innenwand zu B2 und zu P: 0 (Wärmestrom zwischen beheizten/passiven Räumen zählt nicht)
-//   Eigener Netto-Verlust: 498,40 W
+// B1 (beheizt, θ = 20 °C, Fläche 16 m², V = 40 m³)
+//   Außenwand 10 m², U = 1,0 W/(m²K), ΔT = 20 − (−8) = 28 K
+//     10 · (1,0 + 0,1) · 28                   = 308,00 W
+//   Lüftung 0,34 · 0,5 · 40 · 28              = 190,40 W
+//   Innenwand zu B2 (6 m²) und zu P (4 m²)    =   0,00 W  (Raum-zu-Raum, intern)
+//   Eigener Netto-Verlust                     = 498,40 W
 //
-// B2 (beheizt, θ = 20, V = 30):
-//   Wand zum unbeheizten Keller 8 m², U = 1,2: 8 · 1,3 · 15 = 156,00 W
-//   Lüftung: 0,34 · 0,5 · 30 · 28 = 142,80 W
-//   Eigener Netto-Verlust: 298,80 W
+// B2 (beheizt, θ = 20 °C, Fläche 8 m², V = 30 m³)
+//   Wand zum Keller 8 m², U = 1,2, ΔT = 20 − 5 = 15 K
+//     8 · (1,2 + 0,1) · 15                    = 156,00 W
+//   Lüftung 0,34 · 0,5 · 30 · 28              = 142,80 W
+//   Innenwand zu B1 (6 m²)                    =   0,00 W
+//   Eigener Netto-Verlust                     = 298,80 W
 //
-// P (passiv, θ = 15, V = 25):
-//   Außenwand 6 m², U = 0,8: 6 · 0,9 · 23 = 124,20 W
-//   Boden zum Erdreich 4 m², U = 0,5: 4 · 0,6 · 1 · 5 = 12,00 W
-//   Lüftung: 0,34 · 0,5 · 25 · 23 = 97,75 W
-//   Netto-Verlust: 233,95 W
-//   Verteilung: B1 60 %, B2 40 %
-//     → B1 erhält 140,37 W, B2 erhält 93,58 W
+// P (passiv, θ = 15 °C, Fläche 10 m², V = 25 m³)
+//   Außenwand 6 m², U = 0,8, ΔT = 15 − (−8) = 23 K
+//     6 · (0,8 + 0,1) · 23                    = 124,20 W
+//   Boden zum Erdreich 4 m², U = 0,5, ΔT = 15 − 10 = 5 K
+//     4 · (0,5 + 0,1) · 1 · 5                 =  12,00 W
+//   Lüftung 0,34 · 0,5 · 25 · 23              =  97,75 W
+//   Innenwand zu B1 (4 m²)                    =   0,00 W
+//   Netto-Verlust                             = 233,95 W
 //
-// Heizlast B1 = 498,40 + 140,37 = 638,77 W
-// Heizlast B2 = 298,80 + 93,58 = 392,38 W
+// Verteilung von P: B1 60 %, B2 40 %
+//   B1 erhält 0,6 · 233,95 = 140,37 W   → Heizlast B1 = 498,40 + 140,37 = 638,77 W
+//   B2 erhält 0,4 · 233,95 =  93,58 W   → Heizlast B2 = 298,80 +  93,58 = 392,38 W
 //
-// Gebäudesumme = Verluste an Außenluft, Erdreich, unbeheizter Zone + Lüftung:
-//   Hülle: 308,00 + 156,00 + 124,20 + 12,00 = 600,20 W
-//   Lüftung: 190,40 + 142,80 + 97,75 = 430,95 W
-//   Summe: 1031,15 W
-// Und Summe der Heizlasten beheizter Räume: 638,77 + 392,38 = 1031,15 W
-test('Beispiel D: Gebäudesumme ohne Doppelzählung, passive Zurechnung', () => {
-  const ergebnis = berechneGebaeude({
-    einstellungen: basis,
+// Gebäudesumme direkt (Flächen an Außenluft, Erdreich, unbeheizte Zone + Lüftung):
+//   Hülle:   308,00 (B1 außen) + 156,00 (B2 Keller) + 124,20 (P außen) + 12,00 (P Erdreich) = 600,20 W
+//   Lüftung: 190,40 + 142,80 + 97,75                                                          = 430,95 W
+//   Summe                                                                                     = 1031,15 W
+// Gegenprobe: 638,77 + 392,38 = 1031,15 W, Differenz 0 W.
+function beispielD({ einstellungen = basis, verteilung = [{ raumId: 'b1', prozent: 60 }, { raumId: 'b2', prozent: 40 }] } = {}) {
+  return {
+    einstellungen,
     zonen: [
       { id: 'keller', art: 'unbeheizt', temperatur: { min: 5, max: 5 } },
       { id: 'erd', art: 'erdreich', temperatur: { min: 10, max: 10 } },
@@ -218,27 +224,82 @@ test('Beispiel D: Gebäudesumme ohne Doppelzählung, passive Zurechnung', () => 
           { id: 'p-erd', flaeche: 4, u: { min: 0.5, max: 0.5 }, angrenzend: { art: 'zone', zoneId: 'erd' } },
           { id: 'p-b1', flaeche: 4, u: { min: 1.0, max: 1.0 }, angrenzend: { art: 'raum', raumId: 'b1' } },
         ],
-        waermeLieferanten: [
-          { raumId: 'b1', prozent: 60 },
-          { raumId: 'b2', prozent: 40 },
-        ],
+        waermeLieferanten: verteilung,
       },
     ],
-  });
+  };
+}
 
+test('Beispiel D: Gebäudesumme ohne Doppelzählung, passive Zurechnung', () => {
+  const ergebnis = berechneGebaeude(beispielD());
   const [r1, r2, rp] = ergebnis.raeume;
-  gleich(r1.guenstig.netto, 498.40, 0.01, 'B1 eigen');
-  gleich(r2.guenstig.netto, 298.80, 0.01, 'B2 eigen');
-  gleich(rp.guenstig.netto, 233.95, 0.01, 'P netto');
-  gleich(r1.guenstig.zugeteilt, 140.37, 0.01, 'B1 erhält');
-  gleich(r2.guenstig.zugeteilt, 93.58, 0.01, 'B2 erhält');
-  gleich(r1.guenstig.heizlast, 638.77, 0.01, 'B1 Heizlast');
-  gleich(r2.guenstig.heizlast, 392.38, 0.01, 'B2 Heizlast');
 
-  gleich(ergebnis.gebaeude.guenstig.summe, 1031.15, 0.01, 'Gebäudesumme');
-  gleich(ergebnis.gebaeude.guenstig.heizlast, 1031.15, 0.01, 'Summe beheizter Heizlasten');
-  gleich(ergebnis.gebaeude.guenstig.summe, 600.20 + 430.95, 0.01, 'Hülle + Lüftung direkt');
+  for (const fall of ['guenstig', 'ungunstig']) {
+    gleich(r1[fall].netto, 498.40, 0.01, `${fall} B1 eigen`);
+    gleich(r2[fall].netto, 298.80, 0.01, `${fall} B2 eigen`);
+    gleich(rp[fall].netto, 233.95, 0.01, `${fall} P netto`);
+    gleich(r1[fall].zugeteilt, 140.37, 0.01, `${fall} B1 erhält`);
+    gleich(r2[fall].zugeteilt, 93.58, 0.01, `${fall} B2 erhält`);
+    gleich(r1[fall].heizlast, 638.77, 0.01, `${fall} B1 Heizlast`);
+    gleich(r2[fall].heizlast, 392.38, 0.01, `${fall} B2 Heizlast`);
+
+    const gebaeude = ergebnis.gebaeude[fall];
+    gleich(gebaeude.huelle, 600.20, 0.01, `${fall} Hülle`);
+    gleich(gebaeude.lueftung, 430.95, 0.01, `${fall} Lüftung`);
+    gleich(gebaeude.summe, 1031.15, 0.01, `${fall} Gebäudesumme direkt`);
+    gleich(gebaeude.heizlast, 1031.15, 0.01, `${fall} Summe Raumheizlasten`);
+    gleich(gebaeude.differenz, 0, 0.001, `${fall} Differenz`);
+  }
   wahr(ergebnis.warnungen.length === 0, `unerwartete Warnungen: ${JSON.stringify(ergebnis.warnungen)}`);
+});
+
+// Verteilung nur 80 % (B1 50 %, B2 30 %): 20 % des passiven Netto-Verlusts fehlen in den Raumheizlasten.
+//   B1 erhält 0,5 · 233,95 = 116,975 W → Heizlast B1 = 498,40 + 116,975 = 615,375 W
+//   B2 erhält 0,3 · 233,95 =  70,185 W → Heizlast B2 = 298,80 +  70,185 = 368,985 W
+//   Summe Raumheizlasten = 984,36 W, Gebäudesumme direkt unverändert 1031,15 W
+//   Differenz = 1031,15 − 984,36 = 46,79 W (= 0,2 · 233,95), also über 1 W: Warnung
+test('Verteilung nur 80 %: Gegenprobe zeigt Differenz von 46,79 W', () => {
+  const ergebnis = berechneGebaeude(
+    beispielD({ verteilung: [{ raumId: 'b1', prozent: 50 }, { raumId: 'b2', prozent: 30 }] }),
+  );
+  for (const fall of ['guenstig', 'ungunstig']) {
+    const gebaeude = ergebnis.gebaeude[fall];
+    gleich(gebaeude.summe, 1031.15, 0.01, `${fall} Gebäudesumme direkt`);
+    gleich(gebaeude.heizlast, 984.36, 0.01, `${fall} Summe Raumheizlasten`);
+    gleich(gebaeude.differenz, 46.79, 0.01, `${fall} Differenz`);
+    const warnung = ergebnis.warnungen.find((w) => w.art === 'gegenprobe' && w.fall === fall);
+    wahr(warnung !== undefined, `${fall}: Warnung Gegenprobe fehlt`);
+    gleich(warnung.differenz, 46.79, 0.01, `${fall} Differenz in der Warnung`);
+  }
+  wahr(ergebnis.warnungen.some((w) => w.art === 'passiv_verteilung' && w.raumId === 'p'), 'Verteilungswarnung fehlt');
+});
+
+// Abweichung bis 1 W löst keine Warnung aus.
+//   Verteilung 99,5 %: Differenz = 0,005 · 233,95 = 1,17 W → Warnung (über 1 W)
+//   Verteilung 99,9 %: Differenz = 0,001 · 233,95 = 0,23 W → keine Gegenprobe-Warnung
+test('Gegenprobe: Schwelle liegt bei 1 W', () => {
+  const knapp = berechneGebaeude(
+    beispielD({ verteilung: [{ raumId: 'b1', prozent: 59.9 }, { raumId: 'b2', prozent: 40 }] }),
+  );
+  gleich(knapp.gebaeude.guenstig.differenz, 0.23, 0.01, 'Differenz 99,9 %');
+  wahr(!knapp.warnungen.some((w) => w.art === 'gegenprobe'), 'bei 0,23 W darf keine Gegenprobe-Warnung kommen');
+
+  const deutlich = berechneGebaeude(
+    beispielD({ verteilung: [{ raumId: 'b1', prozent: 59.5 }, { raumId: 'b2', prozent: 40 }] }),
+  );
+  gleich(deutlich.gebaeude.guenstig.differenz, 1.17, 0.01, 'Differenz 99,5 %');
+  wahr(deutlich.warnungen.some((w) => w.art === 'gegenprobe'), 'bei 1,17 W muss die Gegenprobe-Warnung kommen');
+});
+
+// Aufheizzuschlag 10 W/m² auf beheizte und passive Räume: 10 · (16 + 8 + 10) = 340 W mehr.
+//   Gebäudesumme direkt = 1031,15 + 340 = 1371,15 W, Gegenprobe ohne Differenz.
+test('Aufheizzuschlag geht in Gebäudesumme und Raumheizlasten gleich ein', () => {
+  const ergebnis = berechneGebaeude(
+    beispielD({ einstellungen: { ...basis, aufheizzuschlag: { aktiv: true, wProM2: 10 } } }),
+  );
+  gleich(ergebnis.gebaeude.guenstig.summe, 1371.15, 0.01, 'Gebäudesumme');
+  gleich(ergebnis.gebaeude.guenstig.heizlast, 1371.15, 0.01, 'Summe Raumheizlasten');
+  gleich(ergebnis.gebaeude.guenstig.differenz, 0, 0.001, 'Differenz');
 });
 
 test('Passiver Raum ohne vollständige Verteilung erzeugt eine Warnung', () => {
