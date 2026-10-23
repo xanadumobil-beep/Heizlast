@@ -317,6 +317,170 @@ test('Passiver Raum ohne vollständige Verteilung erzeugt eine Warnung', () => {
   wahr(ergebnis.warnungen.some((w) => w.art === 'passiv_verteilung' && w.raumId === 'p'), 'Warnung fehlt');
 });
 
+// --- Beispiel E: Raum-zu-Raum bei unterschiedlicher Temperatur ----------------
+//
+// Regel: Ein Raum verliert Wärme an einen kälteren Nachbarraum, A · U · (θ_i − θ_Nachbar), ohne ΔU_WB.
+// Das wird seiner Raumheizlast angerechnet. Gewinne aus einem wärmeren Nachbarn gibt es nicht.
+// In der Gebäudesumme erscheinen diese Ströme nicht.
+//
+// Gemeinsame Eingaben: θ_e = −8 °C, ΔU_WB = 0,10, f_g = 1, n = 0,5 h⁻¹, Aufheizzuschlag aus.
+//
+// Bad (beheizt, θ = 22 °C, Fläche 6 m², Höhe 2,5 m → V = 15 m³)
+//   Außenwand 5 m², U = 1,2, ΔT = 22 + 8 = 30 K
+//     5 · (1,2 + 0,1) · 30                      = 195,00 W
+//   Lüftung 0,34 · 0,5 · 15 · 30                =  76,50 W
+//   Innenwand zu R1: 8 m², U = 1,5, ΔT = 22 − 20 = 2 K, ohne ΔU_WB
+//     8 · 1,5 · 2                               =  24,00 W   ← Raum-zu-Raum, wird angerechnet
+//   Heizlast Bad = 195,00 + 76,50 + 24,00       = 295,50 W
+//
+// R1 (beheizt, θ = 20 °C, Fläche 16 m², V = 40 m³)
+//   Außenwand 10 m², U = 1,0, ΔT = 28 K
+//     10 · (1,0 + 0,1) · 28                     = 308,00 W
+//   Lüftung 0,34 · 0,5 · 40 · 28                = 190,40 W
+//   Innenwand zum wärmeren Bad                  =   0,00 W   ← keine Gutschrift
+//   Heizlast R1 = 308,00 + 190,40               = 498,40 W
+//
+// Gebäudesumme direkt (ohne Raum-zu-Raum): 195,00 + 76,50 + 308,00 + 190,40 = 769,90 W
+// Summe der Raumheizlasten: 295,50 + 498,40 = 793,90 W (um die 24 W größer als die Gebäudesumme)
+// Gegenprobe: 769,90 + 24,00 − 793,90 = 0 W, keine Warnung.
+function beispielE({ innenU = { min: 1.5, max: 1.5 }, r1ListetWand = false } = {}) {
+  const r1Flaechen = [{ id: 'r1-aussen', flaeche: 10, u: { min: 1.0, max: 1.0 }, angrenzend: aussen }];
+  if (r1ListetWand) {
+    // Dieselbe Wand, von der anderen Seite geführt.
+    r1Flaechen.push({ id: 'r1-bad', flaeche: 8, u: innenU, angrenzend: { art: 'raum', raumId: 'bad' } });
+  }
+  return {
+    einstellungen: basis,
+    raeume: [
+      {
+        id: 'bad', name: 'Bad', status: 'beheizt', theta: 22, flaeche: 6, volumen: 15, luftwechsel: null,
+        flaechen: [
+          { id: 'bad-aussen', flaeche: 5, u: { min: 1.2, max: 1.2 }, angrenzend: aussen },
+          { id: 'bad-r1', flaeche: 8, u: innenU, angrenzend: { art: 'raum', raumId: 'r1' } },
+        ],
+      },
+      {
+        id: 'r1', name: 'R1', status: 'beheizt', theta: 20, flaeche: 16, volumen: 40, luftwechsel: null,
+        flaechen: r1Flaechen,
+      },
+    ],
+  };
+}
+
+test('Beispiel E: Bad erhält 24 W zusätzlich, R1 bekommt keine Gutschrift', () => {
+  const ergebnis = berechneGebaeude(beispielE());
+  const [bad, r1] = ergebnis.raeume;
+  for (const fall of ['guenstig', 'ungunstig']) {
+    gleich(bad[fall].raumZuRaumSumme, 24.00, 0.001, `${fall} Bad Raum-zu-Raum`);
+    gleich(bad[fall].heizlast, 295.50, 0.01, `${fall} Bad Heizlast`);
+    gleich(r1[fall].raumZuRaumSumme, 0, 0.001, `${fall} R1 Raum-zu-Raum`);
+    gleich(r1[fall].heizlast, 498.40, 0.01, `${fall} R1 Heizlast`);
+
+    const gebaeude = ergebnis.gebaeude[fall];
+    gleich(gebaeude.summe, 769.90, 0.01, `${fall} Gebäudesumme`);
+    gleich(gebaeude.raumZuRaum, 24.00, 0.001, `${fall} Raum-zu-Raum gesamt`);
+    gleich(gebaeude.heizlast, 793.90, 0.01, `${fall} Summe Raumheizlasten`);
+    gleich(gebaeude.differenz, 0, 0.001, `${fall} Differenz`);
+  }
+  // Die Liste der angerechneten Verluste zeigt Fläche, Nachbar und Leistung.
+  wahr(bad.guenstig.raumZuRaum.length === 1, 'genau ein angerechneter Verlust beim Bad');
+  wahr(bad.guenstig.raumZuRaum[0].nachbarId === 'r1' && bad.guenstig.raumZuRaum[0].flaecheId === 'bad-r1', 'Nachbar und Fläche');
+  wahr(r1.guenstig.raumZuRaum.length === 0, 'R1 hat keinen angerechneten Verlust');
+  wahr(ergebnis.warnungen.length === 0, `unerwartete Warnungen: ${JSON.stringify(ergebnis.warnungen)}`);
+});
+
+// Wird die Wand in beiden Räumen geführt, zählt nur der Eintrag im wärmeren Raum.
+// R1 führt die Fläche zum wärmeren Bad: 0 W, kein Doppelzählen, kein Gutschreiben.
+test('Beispiel E: Wand in beiden Räumen geführt zählt nur im wärmeren Raum', () => {
+  const ergebnis = berechneGebaeude(beispielE({ r1ListetWand: true }));
+  const [bad, r1] = ergebnis.raeume;
+  gleich(bad.guenstig.heizlast, 295.50, 0.01, 'Bad Heizlast');
+  gleich(r1.guenstig.heizlast, 498.40, 0.01, 'R1 Heizlast');
+  gleich(ergebnis.gebaeude.guenstig.differenz, 0, 0.001, 'Differenz');
+  const nicht = r1.guenstig.nichtAngerechnet.find((n) => n.flaecheId === 'r1-bad');
+  wahr(nicht && nicht.grund === 'nachbar_waermer', 'R1 muss die Fläche als "Nachbar wärmer" führen');
+  wahr(ergebnis.warnungen.length === 0, 'keine Warnung erwartet');
+});
+
+// Bandbreite beim Innenbauteil: U = 1,0 bis 2,0.
+// günstig:   8 · 1,0 · 2 = 16,00 W → Bad 195,00 + 76,50 + 16,00 = 287,50 W
+// ungünstig: 8 · 2,0 · 2 = 32,00 W → Bad 195,00 + 76,50 + 32,00 = 303,50 W
+test('Beispiel E mit Bandbreite beim Innenbauteil', () => {
+  const ergebnis = berechneGebaeude(beispielE({ innenU: { min: 1.0, max: 2.0 } }));
+  const bad = ergebnis.raeume[0];
+  gleich(bad.guenstig.heizlast, 287.50, 0.01, 'günstig');
+  gleich(bad.ungunstig.heizlast, 303.50, 0.01, 'ungünstig');
+  gleich(ergebnis.gebaeude.guenstig.raumZuRaum, 16.00, 0.001, 'Raum-zu-Raum günstig');
+  gleich(ergebnis.gebaeude.ungunstig.raumZuRaum, 32.00, 0.001, 'Raum-zu-Raum ungünstig');
+  gleich(ergebnis.gebaeude.guenstig.differenz, 0, 0.001, 'Differenz günstig');
+  gleich(ergebnis.gebaeude.ungunstig.differenz, 0, 0.001, 'Differenz ungünstig');
+  wahr(ergebnis.warnungen.length === 0, 'keine Warnung erwartet');
+});
+
+test('Raum-zu-Raum: Fläche zu passivem Raum zählt nicht (Zurechnung deckt ihn schon ab)', () => {
+  // In Beispiel D ist B1 (20 °C) wärmer als P (15 °C) und führt eine Fläche zu P.
+  const ergebnis = berechneGebaeude(beispielD());
+  const b1 = ergebnis.raeume[0];
+  gleich(b1.guenstig.raumZuRaumSumme, 0, 0.001, 'B1 Raum-zu-Raum');
+  const nicht = b1.guenstig.nichtAngerechnet.find((n) => n.nachbarId === 'p');
+  wahr(nicht && nicht.grund === 'nachbar_passiv', 'Grund "nachbar_passiv" erwartet');
+});
+
+// --- Gegenprobe zusammen mit Raum-zu-Raum-Verlusten ----------------------------
+//
+// Beispiel D mit B2 bei 22 °C (statt 20 °C):
+//   B2: Keller 8 · 1,3 · 17 = 176,80 W, Lüftung 0,34 · 0,5 · 30 · 30 = 153,00 W,
+//       Raum-zu-Raum zu B1: 6 m² · U 1,0 · (22 − 20) = 12,00 W → eigener Netto-Verlust 341,80 W
+//   B1: unverändert 498,40 W (die Fläche zum wärmeren B2 zählt nicht, die zu P auch nicht)
+//   P: unverändert 233,95 W; Verteilung 60 % / 40 %
+//   Heizlast B1 = 498,40 + 140,37 = 638,77 W, Heizlast B2 = 341,80 + 93,58 = 435,38 W
+//   Raumsumme = 1074,15 W
+//   Gebäudesumme direkt: Hülle 308,00 + 176,80 + 124,20 + 12,00 = 621,00 W,
+//                        Lüftung 190,40 + 153,00 + 97,75 = 441,15 W → 1062,15 W
+//   Gegenprobe: 1062,15 + 12,00 − 1074,15 = 0 W
+function beispielF(verteilung) {
+  const eingabe = beispielD(verteilung ? { verteilung } : {});
+  eingabe.raeume.find((r) => r.id === 'b2').theta = 22;
+  return eingabe;
+}
+
+test('Gegenprobe mit Raum-zu-Raum: Raumsumme darf um die angerechneten Verluste größer sein', () => {
+  const ergebnis = berechneGebaeude(beispielF());
+  const g = ergebnis.gebaeude.guenstig;
+  gleich(ergebnis.raeume[1].guenstig.raumZuRaumSumme, 12.00, 0.001, 'B2 Raum-zu-Raum');
+  gleich(ergebnis.raeume[1].guenstig.heizlast, 435.38, 0.01, 'B2 Heizlast');
+  gleich(g.summe, 1062.15, 0.01, 'Gebäudesumme direkt');
+  gleich(g.heizlast, 1074.15, 0.01, 'Summe Raumheizlasten');
+  wahr(g.heizlast > g.summe, 'Raumsumme ist größer als die Gebäudesumme');
+  gleich(g.differenz, 0, 0.001, 'Differenz');
+  wahr(ergebnis.warnungen.length === 0, `unerwartete Warnungen: ${JSON.stringify(ergebnis.warnungen)}`);
+});
+
+// Verteilung 99,5 %: es fehlen 0,005 · 233,95 = 1,17 W. Die Raumsumme (1072,98 W) liegt dann noch
+// über der Gebäudesumme (1062,15 W), trotzdem muss die Gegenprobe anschlagen.
+test('Gegenprobe erkennt fehlende Wärme auch wenn die Raumsumme über der Gebäudesumme liegt', () => {
+  const ergebnis = berechneGebaeude(beispielF([{ raumId: 'b1', prozent: 59.5 }, { raumId: 'b2', prozent: 40 }]));
+  const g = ergebnis.gebaeude.guenstig;
+  wahr(g.heizlast > g.summe, 'Raumsumme liegt über der Gebäudesumme');
+  gleich(g.differenz, 1.17, 0.01, 'Differenz');
+  wahr(ergebnis.warnungen.some((w) => w.art === 'gegenprobe'), 'Warnung fehlt');
+});
+
+// Verteilung 110 %: 0,1 · 233,95 = 23,40 W zu viel, Differenz −23,40 W.
+test('Gegenprobe erkennt doppelt gezählte Wärme', () => {
+  const ergebnis = berechneGebaeude(beispielF([{ raumId: 'b1', prozent: 60 }, { raumId: 'b2', prozent: 50 }]));
+  gleich(ergebnis.gebaeude.guenstig.differenz, -23.40, 0.01, 'Differenz');
+  const w = ergebnis.warnungen.find((x) => x.art === 'gegenprobe' && x.fall === 'guenstig');
+  wahr(w && w.differenz < -1, 'Warnung mit negativer Differenz erwartet');
+});
+
+test('Fläche zu unbekanntem oder unbeheiztem Raum erzeugt einen Hinweis', () => {
+  const eingabe = beispielE();
+  eingabe.raeume[0].flaechen[1].angrenzend = { art: 'raum', raumId: 'gibt-es-nicht' };
+  const ergebnis = berechneGebaeude(eingabe);
+  wahr(ergebnis.warnungen.some((w) => w.art === 'gegenraum_unbrauchbar' && w.grund === 'nachbar_unbekannt'), 'Hinweis fehlt');
+});
+
 // --- Eingabe im deutschen Format ----------------------------------------------
 test('Dezimalkomma wird als Zahl gelesen', () => {
   gleich(parseDezimal('1,5'), 1.5, 1e-9, '1,5');
