@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Heizlast – Tests</title>
+  <style>
+    :root { --bg: #f7f7f5; --fg: #1d1d1b; --ok: #1b7a3a; --err: #b3261e; --card: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --bg: #161615; --fg: #ecebe7; --ok: #6fd08c; --err: #ff8a80; --card: #222220; }
+    }
+    :root[data-theme="dark"] { --bg: #161615; --fg: #ecebe7; --ok: #6fd08c; --err: #ff8a80; --card: #222220; }
+    body { background: var(--bg); color: var(--fg); font: 17px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 16px; }
+    h1 { font-size: 1.4rem; }
+    .zusammenfassung { font-weight: 600; margin: 8px 0 16px; }
+    .test { background: var(--card); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+    .ok { color: var(--ok); }
+    .fehler { color: var(--err); }
+    .fehlertext { font-family: ui-monospace, monospace; font-size: 0.9rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Rechenkern – Tests</h1>
+  <p class="zusammenfassung" id="zusammenfassung">Tests laufen …</p>
+  <div id="liste"></div>
+
+  <script type="module">
+    import './engine.test.js';
+    import { alleTestsAusfuehren } from './runner.js';
+
+    const ergebnisse = await alleTestsAusfuehren();
+    const liste = document.getElementById('liste');
+    let fehlgeschlagen = 0;
+
+    for (const e of ergebnisse) {
+      const karte = document.createElement('div');
+      karte.className = 'test';
+      const titel = document.createElement('div');
+      titel.className = e.ok ? 'ok' : 'fehler';
+      titel.textContent = (e.ok ? '✔ ' : '✘ ') + e.name;
+      karte.appendChild(titel);
+      if (!e.ok) {
+        fehlgeschlagen += 1;
+        const text = document.createElement('div');
+        text.className = 'fehlertext';
+        text.textContent = e.fehler;
+        karte.appendChild(text);
+      }
+      liste.appendChild(karte);
+    }
+
+    const bestanden = ergebnisse.length - fehlgeschlagen;
+    const zusammenfassung = document.getElementById('zusammenfassung');
+    zusammenfassung.textContent = `${bestanden} von ${ergebnisse.length} Tests bestanden.`;
+    zusammenfassung.className = `zusammenfassung ${fehlgeschlagen === 0 ? 'ok' : 'fehler'}`;
+  </script>
+</body>
+</html>
