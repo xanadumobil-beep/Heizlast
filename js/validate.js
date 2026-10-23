@@ -6,6 +6,7 @@
 // Warnungen markieren unplausible Werte, sie lassen sich aber trotzdem speichern.
 
 import { zahlZuText } from './engine/format.js';
+import { parseKennlinie, normleistungVon } from './modell.js';
 
 const fehler = (feld, text) => ({ feld, stufe: 'fehler', text });
 const warnung = (feld, text) => ({ feld, stufe: 'warnung', text });
@@ -196,6 +197,66 @@ export function validiereOeffnungEintrag(oeffnung, { typIds }) {
   ];
   if (istZahl(oeffnung.anzahl) && !Number.isInteger(oeffnung.anzahl)) {
     meldungen.push(fehler('anzahl', 'Anzahl: bitte eine ganze Zahl eingeben.'));
+  }
+  return meldungen;
+}
+
+// Heizkörper. Eine fehlende Leistung ist kein Fehler: der Heizkörper lässt sich speichern, gilt
+// dann aber als "Leistung fehlt" und bekommt keine Vorlauftemperatur. Das erscheint als Warnung.
+export function validiereHeizkoerper(h, { bauarten, stati, ventile }) {
+  const meldungen = [
+    ...ausListe('bauart', h.bauart, bauarten, 'Bauart'),
+    ...ausListe('status', h.status, stati, 'Status'),
+    ...ausListe('ventil', h.ventil, ventile, 'Ventil'),
+  ];
+  const optional = (feld, wert, opt) => (wert === null || wert === undefined ? [] : zahl(feld, wert, opt));
+
+  meldungen.push(
+    ...optional('bauhoehe', h.bauhoehe, { name: 'Bauhöhe', einheit: 'mm', fehlerWennKleinerGleich: 0, warnWennUeber: 3000 }),
+    ...optional('baulaenge', h.baulaenge, { name: 'Baulänge', einheit: 'mm', fehlerWennKleinerGleich: 0, warnWennUeber: 5000 }),
+    ...optional('bautiefe', h.bautiefe, { name: 'Bautiefe', einheit: 'mm', fehlerWennKleinerGleich: 0, warnWennUeber: 400 }),
+    ...optional('nabenabstand', h.nabenabstand, { name: 'Nabenabstand', einheit: 'mm', fehlerWennKleinerGleich: 0, warnWennUeber: 2500 }),
+    ...optional('gliederzahl', h.gliederzahl, { name: 'Gliederzahl', fehlerWennKleiner: 1, warnWennUeber: 60 }),
+  );
+  if (istZahl(h.gliederzahl) && !Number.isInteger(h.gliederzahl)) {
+    meldungen.push(fehler('gliederzahl', 'Gliederzahl: bitte eine ganze Zahl eingeben.'));
+  }
+
+  if (h.bauart === 'wp') {
+    const kennlinie = parseKennlinie(h.kennlinieText);
+    for (const f of kennlinie.fehler) meldungen.push(fehler('kennlinieText', `Zeile ${f.zeile}: ${f.text}`));
+    if (kennlinie.fehler.length === 0 && kennlinie.paare.length < 2) {
+      meldungen.push(warnung('kennlinieText', 'Leistung fehlt: Mindestens zwei Wertepaare nötig. Bis dahin gibt es keine Vorlauftemperatur für diesen Raum.'));
+    }
+    if (kennlinie.paare.length > 0) {
+      meldungen.push(...zahl('kennlinieRaumtemperatur', h.kennlinieRaumtemperatur, {
+        name: 'Raumtemperatur laut Datenblatt', einheit: '°C', warnWennUeber: 30, warnWennUnter: 10,
+      }));
+    }
+    return meldungen;
+  }
+
+  meldungen.push(
+    ...optional('leistungJeGlied', h.leistungJeGlied, { name: 'Leistung je Glied', einheit: 'W', fehlerWennKleinerGleich: 0, warnWennUeber: 400 }),
+    ...optional('normleistung', h.normleistung, { name: 'Normleistung', einheit: 'W', fehlerWennKleinerGleich: 0, warnWennUeber: 8000 }),
+    ...optional('exponent', h.exponent, { name: 'Heizkörperexponent', fehlerWennKleinerGleich: 0, warnWennUeber: 1.6, warnWennUnter: 1 }),
+  );
+
+  // Normbedingungen: Vorlauf über Rücklauf über Raumtemperatur.
+  for (const [feld, name] of [['normVorlauf', 'Vorlauf'], ['normRuecklauf', 'Rücklauf'], ['normRaum', 'Raumtemperatur']]) {
+    meldungen.push(...zahl(feld, h[feld], { name: `Normbedingung ${name}`, einheit: '°C', warnWennUeber: 100, warnWennUnter: 0 }));
+  }
+  if ([h.normVorlauf, h.normRuecklauf, h.normRaum].every(istZahl) && !(h.normVorlauf > h.normRuecklauf && h.normRuecklauf > h.normRaum)) {
+    meldungen.push(fehler('normRuecklauf', 'Normbedingungen: der Vorlauf muss über dem Rücklauf liegen und der Rücklauf über der Raumtemperatur.'));
+  }
+
+  if (normleistungVon(h) === null) {
+    meldungen.push(warnung(
+      'normleistung',
+      h.bauart === 'glieder'
+        ? 'Leistung fehlt: Normleistung oder Leistung je Glied mit Gliederzahl eintragen. Bis dahin gibt es keine Vorlauftemperatur für diesen Raum.'
+        : 'Leistung fehlt: Bis zur Eingabe der Normleistung gibt es keine Vorlauftemperatur für diesen Raum.',
+    ));
   }
   return meldungen;
 }

@@ -289,6 +289,7 @@ export function berechneGebaeude({ einstellungen, zonen = [], raeume }) {
       id: r.id,
       name: r.name,
       status: r.status,
+      theta: r.theta,
       guenstig: g,
       ungunstig: u,
       mittel: { heizlast: (g.heizlast + u.heizlast) / 2, netto: (g.netto + u.netto) / 2 },

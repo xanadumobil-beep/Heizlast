@@ -162,3 +162,66 @@ export function doppelteIds({ flaechen, heizkoerper = [] }) {
   for (const h of heizkoerper) merke('heizkoerper', h.id);
   return [...zaehler].filter(([, n]) => n > 1).map(([schluessel]) => schluessel);
 }
+
+// --- Heizkörper --------------------------------------------------------------------------
+
+// Kennlinie von Wärmepumpen-Heizkörpern als Text: ein Wertepaar (Vorlauftemperatur, Leistung) je Zeile,
+// zum Beispiel "35 600". Trenner sind Leerzeichen oder Semikolon, Dezimalkomma ist erlaubt.
+// Rückgabe: { paare: [{ vorlauf, leistung }], fehler: [{ zeile, text }] }
+export function parseKennlinie(text) {
+  const paare = [];
+  const fehler = [];
+  const gesehen = new Set();
+  String(text ?? '').split('\n').forEach((roh, index) => {
+    const zeile = index + 1;
+    const inhalt = roh.trim();
+    if (inhalt === '') return;
+    const teile = inhalt.split(/[\s;]+/).filter(Boolean).map((t) => t.replace(',', '.'));
+    const zahlen = teile.map((t) => (/^-?\d+(\.\d+)?$/.test(t) ? Number(t) : NaN));
+    if (teile.length !== 2 || zahlen.some(Number.isNaN)) {
+      fehler.push({ zeile, text: 'bitte Vorlauftemperatur und Leistung eingeben, zum Beispiel „45 1000“.' });
+      return;
+    }
+    const [vorlauf, leistung] = zahlen;
+    if (leistung <= 0) {
+      fehler.push({ zeile, text: 'die Leistung muss größer als 0 sein.' });
+    } else if (gesehen.has(vorlauf)) {
+      fehler.push({ zeile, text: `die Vorlauftemperatur ${vorlauf} kommt doppelt vor.` });
+    } else {
+      gesehen.add(vorlauf);
+      paare.push({ vorlauf, leistung });
+    }
+  });
+  return { paare, fehler };
+}
+
+export function kennlinieZuText(paare) {
+  return (paare ?? []).map((p) => `${String(p.vorlauf).replace('.', ',')} ${String(p.leistung).replace('.', ',')}`).join('\n');
+}
+
+// Normleistung eines Heizkörpers: eingetragener Wert, sonst Leistung je Glied mal Gliederzahl.
+// Fehlen beide, ist die Leistung unbekannt (null). Es gibt keinen Ersatzwert.
+export function normleistungVon(h) {
+  if (typeof h.normleistung === 'number' && h.normleistung > 0) return h.normleistung;
+  if (typeof h.leistungJeGlied === 'number' && h.leistungJeGlied > 0 && typeof h.gliederzahl === 'number' && h.gliederzahl > 0) {
+    return h.leistungJeGlied * h.gliederzahl;
+  }
+  return null;
+}
+
+// Gespeicherte Heizkörper in die Form für den Rechenkern bringen. Der Exponent kommt aus dem
+// Heizkörper, sonst aus den Einstellungen.
+export function baueHeizkoerperEingabe(heizkoerper, einstellungen) {
+  return heizkoerper.map((h) => ({
+    id: h.id,
+    raumId: h.raumId,
+    status: h.status,
+    bauart: h.bauart,
+    ventil: h.ventil,
+    phiN: normleistungVon(h),
+    n: typeof h.exponent === 'number' ? h.exponent : einstellungen.heizkoerperExponent,
+    norm: { tV: h.normVorlauf, tR: h.normRuecklauf, ti: h.normRaum },
+    kennlinie: h.kennlinie ?? [],
+    kennlinieRaumtemperatur: h.kennlinieRaumtemperatur,
+  }));
+}

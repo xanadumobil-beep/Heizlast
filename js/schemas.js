@@ -68,6 +68,7 @@ export function standardEinstellungen() {
     aufheizzuschlag: { aktiv: false, wProM2: 0 },
     spreizung: 5,
     heizkoerperExponent: 1.3,
+    zielVorlauf: 45,
   };
 }
 
@@ -260,5 +261,106 @@ export function oeffnungsEintragFelder({ oeffnungstypen }) {
     { key: 'hoehe', label: 'Höhe', typ: 'zahl', einheit: 'm', sichtbarWenn: { feld: 'modus', wert: 'laengeHoehe' } },
     { key: 'flaeche', label: 'Fläche je Stück', typ: 'zahl', einheit: 'm²', sichtbarWenn: { feld: 'modus', wert: 'flaeche' } },
     { key: 'anzahl', label: 'Anzahl', typ: 'zahl' },
+  ];
+}
+
+// --- Heizkörper ------------------------------------------------------------------------
+
+export const BAUARTEN_HK = [
+  { wert: 'platten', label: 'Plattenheizkörper' },
+  { wert: 'glieder', label: 'Gliederheizkörper' },
+  { wert: 'handtuch', label: 'Handtuchheizkörper' },
+  { wert: 'wp', label: 'Wärmepumpen-Heizkörper mit Lüfter' },
+  { wert: 'sonstige', label: 'Sonstiges' },
+];
+
+export const HK_TYPEN = [
+  { wert: '', label: '– keine Angabe –' },
+  { wert: '11', label: '11' },
+  { wert: '21', label: '21' },
+  { wert: '22', label: '22' },
+  { wert: '33', label: '33' },
+  { wert: 'andere', label: 'anderer Typ' },
+];
+
+export const MATERIALIEN = [
+  { wert: '', label: '– keine Angabe –' },
+  { wert: 'stahl', label: 'Stahl' },
+  { wert: 'guss', label: 'Guss' },
+  { wert: 'aluminium', label: 'Aluminium' },
+  { wert: 'sonstiges', label: 'Sonstiges' },
+];
+
+export const VENTILE = [
+  { wert: 'neu', label: 'Neues Ventil' },
+  { wert: 'alt', label: 'Altes Ventil' },
+];
+
+export const HK_STATI = [
+  { wert: 'bleibt', label: 'Bleibt' },
+  { wert: 'entfaellt', label: 'Entfällt' },
+  { wert: 'neu', label: 'Neu' },
+  { wert: 'geplant', label: 'Geplant' },
+];
+
+// Die Normbedingungen sind mit dem häufigsten Wert 75/65/20 vorbelegt und sichtbar änderbar.
+// Eine Leistung wird nie vorbelegt: fehlt sie, gilt der Heizkörper als "Leistung fehlt".
+export function neuerHeizkoerper(raumId) {
+  return {
+    raumId, bauart: 'platten', typ: '', status: 'bleibt', material: '', ventil: 'neu',
+    bauhoehe: null, baulaenge: null, bautiefe: null, nabenabstand: null,
+    gliederzahl: null, leistungJeGlied: null, normleistung: null,
+    normVorlauf: 75, normRuecklauf: 65, normRaum: 20, exponent: null,
+    kennlinie: [], kennlinieText: '', kennlinieRaumtemperatur: 20, notiz: '',
+  };
+}
+
+const keinWp = { feld: 'bauart', in: ['platten', 'glieder', 'handtuch', 'sonstige'] };
+
+export function heizkoerperFelder() {
+  return [
+    { key: 'bauart', label: 'Bauart', typ: 'auswahl', optionen: BAUARTEN_HK },
+    {
+      key: 'status', label: 'Status', typ: 'auswahl', optionen: HK_STATI,
+      hinweis: 'Heizkörper mit Status „Entfällt“ zählen bei der Deckung nicht mit.',
+    },
+    { key: 'typ', label: 'Typ', typ: 'auswahl', optionen: HK_TYPEN, sichtbarWenn: { feld: 'bauart', in: ['platten'] } },
+    { key: 'material', label: 'Material', typ: 'auswahl', optionen: MATERIALIEN },
+    { key: 'bauhoehe', label: 'Bauhöhe', typ: 'zahl', einheit: 'mm' },
+    { key: 'baulaenge', label: 'Baulänge', typ: 'zahl', einheit: 'mm' },
+    { key: 'bautiefe', label: 'Bautiefe', typ: 'zahl', einheit: 'mm' },
+    { key: 'nabenabstand', label: 'Nabenabstand', typ: 'zahl', einheit: 'mm', sichtbarWenn: { feld: 'bauart', in: ['glieder', 'handtuch', 'sonstige'] } },
+    { key: 'gliederzahl', label: 'Gliederzahl', typ: 'zahl', sichtbarWenn: { feld: 'bauart', in: ['glieder'] } },
+    {
+      key: 'leistungJeGlied', label: 'Leistung je Glied', typ: 'zahl', einheit: 'W', sichtbarWenn: { feld: 'bauart', in: ['glieder'] },
+      hinweis: 'Bei den Normbedingungen unten. Gilt nur, wenn keine Normleistung eingetragen ist.',
+    },
+    {
+      key: 'normleistung', label: 'Normleistung', typ: 'zahl', einheit: 'W', sichtbarWenn: keinWp,
+      hinweis: 'Laut Typenschild oder Datenblatt bei den Normbedingungen. Leer lassen, wenn sie unbekannt ist: '
+        + 'der Heizkörper gilt dann als „Leistung fehlt“.',
+    },
+    { key: 'normVorlauf', label: 'Normbedingung: Vorlauf', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp, hinweis: 'Zum Beispiel 75/65/20 oder 55/45/20.' },
+    { key: 'normRuecklauf', label: 'Normbedingung: Rücklauf', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp },
+    { key: 'normRaum', label: 'Normbedingung: Raumtemperatur', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp },
+    {
+      key: 'exponent', label: 'Heizkörperexponent n (optional)', typ: 'zahl', sichtbarWenn: keinWp,
+      hinweis: 'Leer lassen: Standard aus den Einstellungen.',
+    },
+    {
+      key: 'kennlinieText', label: 'Kennlinie aus dem Datenblatt', typ: 'notiz', sichtbarWenn: { feld: 'bauart', in: ['wp'] },
+      hinweis: 'Pro Zeile ein Wertepaar aus Vorlauftemperatur in °C und Leistung in W, zum Beispiel „35 600“. '
+        + 'Mindestens zwei Paare. Zwischen den Paaren wird linear interpoliert, außerhalb gibt es keine Werte.',
+    },
+    {
+      key: 'kennlinieRaumtemperatur', label: 'Raumtemperatur laut Datenblatt', typ: 'zahl', einheit: '°C',
+      sichtbarWenn: { feld: 'bauart', in: ['wp'] },
+      hinweis: 'Für diese Raumtemperatur gelten die Leistungswerte. Die App rechnet sie nicht um.',
+    },
+    {
+      key: 'ventil', label: 'Ventil', typ: 'auswahl', optionen: VENTILE,
+      hinweis: 'Alte Ventile erscheinen nur als Hinweis (kein hydraulischer Abgleich möglich). Die Leistung ändert sich dadurch nicht.',
+    },
+    { key: 'notiz', label: 'Notiz', typ: 'notiz' },
   ];
 }

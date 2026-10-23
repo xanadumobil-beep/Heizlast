@@ -219,3 +219,26 @@ button.klein { min-height: 36px; padding: 0 12px; font-size: 0.9rem; }
   .tabelle { font-size: 0.85rem; }
   .tabelle th, .tabelle td { padding: 6px 4px; }
 }
+
+/* Vorlauf */
+.tabellenrahmen { overflow-x: auto; margin-top: 16px; background: var(--flaeche); border: 1px solid var(--linie); border-radius: var(--radius); }
+.gross-tabelle { min-width: 860px; margin: 0; }
+.gross-tabelle thead th { vertical-align: bottom; font-size: 0.85rem; }
+.gross-tabelle th[scope="row"] { font-weight: 600; min-width: 130px; }
+.unterzeile { display: block; color: var(--text-leise); font-weight: normal; }
+.tabelle tr.bestimmend th, .tabelle tr.bestimmend td { background: var(--warnung-bg); }
+.tabelle td.unter { color: var(--fehler); }
+.tabelle td.ueber { color: var(--ok); }
+.tabelle td.warnwert { color: var(--fehler); font-weight: 600; white-space: normal; text-align: right; }
+.tabelle td.stark { font-weight: 700; }
+.tabelle tr.hinweiszeile td { font-size: 0.9rem; color: var(--text-leise); padding-top: 0; }
+.tabelle tr.hinweiszeile ul { margin: 0 0 4px; padding-left: 18px; }
+.tabelle tr.hinweiszeile li { margin-bottom: 2px; }
+.gross-tabelle .marke { display: block; width: fit-content; margin: 4px 0 0; }
+.gross-tabelle thead th, .gross-tabelle thead th.zahl { white-space: normal; max-width: 140px; line-height: 1.25; }
+
+.regleranzeige { margin-top: 16px; }
+.reglerzeile { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.regler { flex: 1 1 220px; min-width: 160px; height: 48px; accent-color: var(--akzent); }
+.reglerzeile button { min-width: 48px; font-size: 1.3rem; padding: 0; }
+.zielwert { min-width: 64px; font-size: 1.5rem; font-weight: 700; text-align: right; }

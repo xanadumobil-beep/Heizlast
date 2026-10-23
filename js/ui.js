@@ -110,6 +110,7 @@ function baueFeld(feld, wert, beiAenderung) {
 // Ein Feld kann bedingt sichtbar sein:
 //   sichtbarWenn: { feld: 'status', wert: 'passiv' }        Wert gleich
 //   sichtbarWenn: { feld: 'angrenzendWahl', praefix: 'raum:' } Wert beginnt mit
+//   sichtbarWenn: { feld: 'bauart', in: ['platten', 'glieder'] } Wert ist einer von
 // Ausgeblendete Felder behalten ihren Wert, die Prüfregeln entscheiden, ob er zählt.
 export function baueFormular(felder, werte, beiAenderung = () => {}) {
   const wurzel = el('div', { class: 'formular' });
@@ -135,9 +136,9 @@ export function baueFormular(felder, werte, beiAenderung = () => {}) {
       const bedingung = e.feld.sichtbarWenn;
       if (!bedingung) continue;
       const wert = holeWert(aktuell, bedingung.feld);
-      e.zeile.hidden = bedingung.praefix !== undefined
-        ? !(typeof wert === 'string' && wert.startsWith(bedingung.praefix))
-        : wert !== bedingung.wert;
+      if (bedingung.praefix !== undefined) e.zeile.hidden = !(typeof wert === 'string' && wert.startsWith(bedingung.praefix));
+      else if (bedingung.in !== undefined) e.zeile.hidden = !bedingung.in.includes(wert);
+      else e.zeile.hidden = wert !== bedingung.wert;
     }
   }
 

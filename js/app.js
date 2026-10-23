@@ -6,10 +6,12 @@ import { fordereDauerhaftenSpeicherAn } from './persist.js';
 import { renderEinstellungen } from './views/einstellungen.js';
 import { renderKatalog, KATALOGE } from './views/katalog.js';
 import { renderRaeume, renderRaum } from './views/raeume.js';
+import { renderVorlauf } from './views/vorlauf.js';
 
 // render(container, neuLaden, parameter): parameter ist der Teil nach dem Schrägstrich im Link.
 const TABS = [
   { id: 'raeume', titel: 'Räume', render: (c, neu, id) => (id ? renderRaum(c, id, neu) : renderRaeume(c, neu)) },
+  { id: 'vorlauf', titel: 'Vorlauf', render: (c) => renderVorlauf(c) },
   { id: 'bauteile', titel: 'Bauteile', render: (c, neu) => renderKatalog(c, KATALOGE.bauteile, neu) },
   { id: 'oeffnungen', titel: 'Öffnungen', render: (c, neu) => renderKatalog(c, KATALOGE.oeffnungen, neu) },
   { id: 'zonen', titel: 'Zonen', render: (c, neu) => renderKatalog(c, KATALOGE.zonen, neu) },
@@ -20,7 +22,7 @@ const inhalt = document.getElementById('inhalt');
 const navigation = document.getElementById('navigation');
 let zeichnung = 0;
 
-// Links: #raeume, #raum/<id>, #bauteile, #oeffnungen, #zonen, #einstellungen
+// Links: #raeume, #raum/<id>, #vorlauf, #bauteile, #oeffnungen, #zonen, #einstellungen
 function aktuelleRoute() {
   const [erster, parameter] = location.hash.slice(1).split('/');
   const tabId = erster === 'raum' ? 'raeume' : erster;

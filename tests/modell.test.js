@@ -190,3 +190,49 @@ test('Doppelte IDs im Projekt werden gefunden (Öffnungen aller Flächen, Heizk�
   wahr(doppelt.includes('oeffnung:o1') && doppelt.includes('heizkoerper:h1'), 'beide Dopplungen gefunden');
   wahr(doppelt.length === 2, 'sonst nichts');
 });
+
+// --- Heizkörper: Kennlinie als Text, Leistung ohne Erfindung ---------------------------
+
+import { parseKennlinie, kennlinieZuText, normleistungVon, baueHeizkoerperEingabe } from '../js/modell.js';
+
+test('Kennlinie aus Text: Leerzeichen, Semikolon und Dezimalkomma', () => {
+  const k = parseKennlinie('35 600\n45;1000\n 55,5   1400,5 \n\n');
+  wahr(k.fehler.length === 0, `keine Fehler erwartet: ${JSON.stringify(k.fehler)}`);
+  wahr(k.paare.length === 3, 'drei Paare');
+  gleich(k.paare[2].vorlauf, 55.5, 1e-9, 'Vorlauf mit Komma');
+  gleich(k.paare[2].leistung, 1400.5, 1e-9, 'Leistung mit Komma');
+});
+
+test('Kennlinie aus Text: fehlerhafte Zeilen werden mit Zeilennummer gemeldet', () => {
+  const k = parseKennlinie('35 600\nabc\n45\n45 1000\n45 1100\n55 -5');
+  wahr(k.fehler.map((f) => f.zeile).join() === '2,3,5,6', `Fehler in den Zeilen 2, 3, 5, 6 erwartet: ${JSON.stringify(k.fehler)}`);
+  wahr(k.paare.length === 2, 'gültige Zeilen bleiben erhalten');
+});
+
+test('Kennlinie: Text und Paare wandeln sich verlustfrei um', () => {
+  const paare = [{ vorlauf: 35, leistung: 600 }, { vorlauf: 45.5, leistung: 1000 }];
+  const text = kennlinieZuText(paare);
+  wahr(text === '35 600\n45,5 1000', `Text: ${text}`);
+  wahr(JSON.stringify(parseKennlinie(text).paare) === JSON.stringify(paare), 'Rundlauf');
+});
+
+test('Normleistung: Eintrag, sonst Glieder mal Leistung je Glied, sonst unbekannt', () => {
+  gleich(normleistungVon({ normleistung: 1000, leistungJeGlied: 80, gliederzahl: 10 }), 1000, 1e-9, 'Normleistung hat Vorrang');
+  gleich(normleistungVon({ normleistung: null, leistungJeGlied: 80, gliederzahl: 10 }), 800, 1e-9, '10 Glieder à 80 W');
+  wahr(normleistungVon({ normleistung: null, leistungJeGlied: 80, gliederzahl: null }) === null, 'ohne Gliederzahl unbekannt');
+  wahr(normleistungVon({ normleistung: null }) === null, 'ohne Angabe unbekannt, kein Ersatzwert');
+  wahr(normleistungVon({ normleistung: 0 }) === null, '0 W zählt als unbekannt');
+});
+
+test('Heizkörper für den Rechenkern: Exponent aus Heizkörper oder Einstellungen, ID bleibt erhalten', () => {
+  const einst = { heizkoerperExponent: 1.3 };
+  const gespeichert = [
+    { id: 'hk-1', raumId: 'r', status: 'bleibt', bauart: 'platten', normleistung: 1000, normVorlauf: 75, normRuecklauf: 65, normRaum: 20, exponent: null },
+    { id: 'hk-2', raumId: 'r', status: 'neu', bauart: 'platten', normleistung: 800, normVorlauf: 55, normRuecklauf: 45, normRaum: 20, exponent: 1.25 },
+  ];
+  const eingabe = baueHeizkoerperEingabe(gespeichert, einst);
+  wahr(eingabe.map((h) => h.id).join() === 'hk-1,hk-2', 'IDs bleiben');
+  gleich(eingabe[0].n, 1.3, 1e-9, 'Standardexponent');
+  gleich(eingabe[1].n, 1.25, 1e-9, 'eigener Exponent');
+  wahr(eingabe[1].norm.tV === 55 && eingabe[1].norm.tR === 45, 'Normbedingungen 55/45/20');
+});

@@ -142,3 +142,56 @@ test('Öffnung: Typ und Maße, Anzahl nur als ganze Zahl ab 1', () => {
   wahr(hatFehler(validiereOeffnungEintrag({ ...o, anzahl: null }, optionen)), 'Anzahl leer');
   wahr(hatFehler(validiereOeffnungEintrag({ ...o, laenge: null }, optionen)), 'Breite fehlt');
 });
+
+// --- Heizkörper ------------------------------------------------------------------------
+
+import { validiereHeizkoerper } from '../js/validate.js';
+import { BAUARTEN_HK, HK_STATI, VENTILE } from '../js/schemas.js';
+
+const hkOptionen = { bauarten: werte(BAUARTEN_HK), stati: werte(HK_STATI), ventile: werte(VENTILE) };
+const hk = (extra = {}) => ({
+  bauart: 'platten', status: 'bleibt', ventil: 'neu', normleistung: 1000,
+  normVorlauf: 75, normRuecklauf: 65, normRaum: 20, kennlinieText: '', kennlinieRaumtemperatur: 20, ...extra,
+});
+
+test('Heizkörper: vollständige Angaben ohne Meldung', () => {
+  wahr(validiereHeizkoerper(hk(), hkOptionen).length === 0, 'keine Meldung erwartet');
+});
+
+test('Heizkörper ohne Leistung: Warnung "Leistung fehlt", aber speicherbar', () => {
+  const meldungen = validiereHeizkoerper(hk({ normleistung: null }), hkOptionen);
+  const w = feldMeldung(meldungen, 'normleistung', 'warnung');
+  wahr(w && w.text.startsWith('Leistung fehlt'), 'Warnung "Leistung fehlt"');
+  wahr(!hatFehler(meldungen), 'kein Fehler');
+});
+
+test('Gliederheizkörper: Leistung je Glied mal Gliederzahl ersetzt die Normleistung', () => {
+  const g = (extra) => hk({ bauart: 'glieder', normleistung: null, ...extra });
+  wahr(validiereHeizkoerper(g({ leistungJeGlied: 80, gliederzahl: 10 }), hkOptionen).length === 0, 'vollständig');
+  wahr(hatWarnungen(validiereHeizkoerper(g({ leistungJeGlied: 80, gliederzahl: null }), hkOptionen)), 'ohne Gliederzahl fehlt die Leistung');
+  wahr(hatFehler(validiereHeizkoerper(g({ leistungJeGlied: 80, gliederzahl: 2.5 }), hkOptionen)), 'Gliederzahl muss ganzzahlig sein');
+});
+
+test('Heizkörper: Normbedingungen müssen Vorlauf > Rücklauf > Raumtemperatur sein', () => {
+  wahr(hatFehler(validiereHeizkoerper(hk({ normVorlauf: 65, normRuecklauf: 75 }), hkOptionen)), 'Vorlauf unter Rücklauf');
+  wahr(hatFehler(validiereHeizkoerper(hk({ normRuecklauf: 20 }), hkOptionen)), 'Rücklauf gleich Raumtemperatur');
+  wahr(hatFehler(validiereHeizkoerper(hk({ normVorlauf: null }), hkOptionen)), 'Bedingung fehlt');
+  wahr(!hatFehler(validiereHeizkoerper(hk({ normVorlauf: 55, normRuecklauf: 45 }), hkOptionen)), '55/45/20 ist gültig');
+});
+
+test('Wärmepumpen-Heizkörper: mindestens zwei Wertepaare, Zeilenfehler blockieren', () => {
+  const wp = (kennlinieText) => hk({ bauart: 'wp', normleistung: null, kennlinieText });
+  wahr(validiereHeizkoerper(wp('35 600\n45 1000'), hkOptionen).length === 0, 'zwei Paare sind genug');
+  const eins = validiereHeizkoerper(wp('35 600'), hkOptionen);
+  wahr(feldMeldung(eins, 'kennlinieText', 'warnung') && !hatFehler(eins), 'ein Paar: Warnung "Leistung fehlt"');
+  const leer = validiereHeizkoerper(wp(''), hkOptionen);
+  wahr(feldMeldung(leer, 'kennlinieText', 'warnung'), 'ohne Paare: Warnung');
+  wahr(hatFehler(validiereHeizkoerper(wp('35 600\nquatsch'), hkOptionen)), 'ungültige Zeile blockiert');
+  wahr(hatFehler(validiereHeizkoerper(wp('35 600\n35 700'), hkOptionen)), 'doppelter Vorlauf blockiert');
+});
+
+test('Heizkörper: ungewöhnliche Werte werden markiert', () => {
+  wahr(hatWarnungen(validiereHeizkoerper(hk({ exponent: 2.1 }), hkOptionen)), 'Exponent 2,1');
+  wahr(hatWarnungen(validiereHeizkoerper(hk({ normleistung: 20000 }), hkOptionen)), 'Normleistung 20 kW');
+  wahr(hatFehler(validiereHeizkoerper(hk({ bauhoehe: 0 }), hkOptionen)), 'Bauhöhe 0');
+});

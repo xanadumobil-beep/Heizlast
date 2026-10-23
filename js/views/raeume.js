@@ -3,6 +3,7 @@
 import * as db from '../db.js';
 import { el, ersetzeKinder } from '../ui.js';
 import { oeffneDialog } from '../dialog.js';
+import { heizkoerperAbschnitt, leistungFehlt } from './heizkoerper.js';
 import { ladeProjekt, rechne } from '../daten.js';
 import { formatZahl, formatBereich, zahlZuText } from '../engine/format.js';
 import { GEGENPROBE_TOLERANZ_W } from '../engine/heatload.js';
@@ -209,7 +210,11 @@ async function loescheRaum(projekt, raum, neuLaden) {
   const eigene = projekt.flaechen.filter((f) => f.raumId === raum.id);
   const fremde = projekt.flaechen.filter((f) => f.raumId !== raum.id && f.angrenzend?.raumId === raum.id);
   const lieferanten = projekt.raeume.filter((r) => r.waermeLieferanten?.some((l) => l.raumId === raum.id));
-  const zeilen = [`Raum „${raum.name}“ mit ${eigene.length} Raumfläche${eigene.length === 1 ? '' : 'n'} löschen?`];
+  const eigeneHeizkoerper = projekt.heizkoerper.filter((h) => h.raumId === raum.id);
+  const zeilen = [
+    `Raum „${raum.name}“ mit ${eigene.length} Raumfläche${eigene.length === 1 ? '' : 'n'}`
+    + ` und ${eigeneHeizkoerper.length} Heizkörper${eigeneHeizkoerper.length === 1 ? '' : 'n'} löschen?`,
+  ];
   if (fremde.length > 0) {
     zeilen.push(`${fremde.length} Fläche${fremde.length === 1 ? '' : 'n'} in anderen Räumen grenz${fremde.length === 1 ? 't' : 'en'} an diesen Raum und werden danach markiert.`);
   }
@@ -219,6 +224,7 @@ async function loescheRaum(projekt, raum, neuLaden) {
   if (!confirm(zeilen.join('\n\n'))) return;
 
   for (const f of eigene) await db.loesche('surfaces', f.id);
+  for (const h of eigeneHeizkoerper) await db.loesche('radiators', h.id);
   for (const r of lieferanten) {
     await db.speichere('rooms', { ...r, waermeLieferanten: r.waermeLieferanten.filter((l) => l.raumId !== raum.id) });
   }
@@ -417,6 +423,17 @@ function gebaeudeBlock(ergebnis) {
   );
 }
 
+// Kurzfassung der Heizkörper für die Raumkarte, mit Warnung bei fehlender Leistung.
+function heizkoerperZeile(projekt, raum) {
+  const eigene = projekt.heizkoerper.filter((h) => h.raumId === raum.id);
+  if (eigene.length === 0) return el('p', { class: 'zeile' }, 'Heizkörper: noch keine erfasst');
+  const ohneLeistung = eigene.filter((h) => h.status !== 'entfaellt' && leistungFehlt(h)).length;
+  return el(
+    'p', { class: ohneLeistung > 0 ? 'meldung warnung' : 'zeile' },
+    `Heizkörper: ${eigene.length}`, ohneLeistung > 0 ? ` · ⚠ bei ${ohneLeistung} fehlt die Leistung` : '',
+  );
+}
+
 function raumKarte(projekt, ergebnis, raum, neuLaden, raumMeldungen = []) {
   const r = ergebnis?.raeume.find((x) => x.id === raum.id) ?? null;
   const volumen = raumVolumen(raum);
@@ -453,6 +470,7 @@ function raumKarte(projekt, ergebnis, raum, neuLaden, raumMeldungen = []) {
     el('h3', {}, raum.name, el('span', { class: raum.status === 'beheizt' ? 'marke ruhig' : 'marke' }, label(STATI, raum.status))),
     el('p', { class: 'zeile' }, kopfzeile),
     ...inhalt,
+    raum.status === 'beheizt' ? heizkoerperZeile(projekt, raum) : null,
     ...meldungsBlock(raumMeldungen),
     raum.notiz ? el('p', { class: 'zeile notiz' }, raum.notiz) : null,
     el(
@@ -575,6 +593,8 @@ export async function renderRaum(container, raumId, neuLaden) {
     eigeneFlaechen.length > 0
       ? el('div', { class: 'karten' }, eigeneFlaechen.map((f) => flaechenKarte(projekt, raum, f, r, neuLaden)))
       : el('p', { class: 'leer' }, 'Noch keine Raumflächen. Mit „+ Fläche“ erfasst du Wände, Decke und Boden.'),
+
+    heizkoerperAbschnitt(projekt, raum, neuLaden),
 
     fremdeFlaechen.length > 0
       ? el(
