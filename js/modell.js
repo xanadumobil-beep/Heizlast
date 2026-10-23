@@ -225,3 +225,16 @@ export function baueHeizkoerperEingabe(heizkoerper, einstellungen) {
     kennlinieRaumtemperatur: h.kennlinieRaumtemperatur,
   }));
 }
+
+// --- Verbrauchsabgleich ------------------------------------------------------------------
+
+// Vorschlag für die mittlere Innentemperatur: Mittelwert der Soll-Temperaturen aller beheizten und
+// passiven Räume, gewichtet mit der Raumfläche. Unbeheizte Räume zählen nicht. Ohne passende Räume null.
+export function mittlereInnentemperatur(raeume) {
+  const gezaehlt = raeume.filter(
+    (r) => (r.status === 'beheizt' || r.status === 'passiv') && istZahl(r.theta) && istZahl(r.flaeche) && r.flaeche > 0,
+  );
+  const flaeche = gezaehlt.reduce((s, r) => s + r.flaeche, 0);
+  if (flaeche === 0) return null;
+  return gezaehlt.reduce((s, r) => s + r.theta * r.flaeche, 0) / flaeche;
+}

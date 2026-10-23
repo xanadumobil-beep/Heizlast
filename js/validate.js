@@ -7,6 +7,7 @@
 
 import { zahlZuText } from './engine/format.js';
 import { parseKennlinie, normleistungVon } from './modell.js';
+import { gradtage } from './engine/verbrauch.js';
 
 const fehler = (feld, text) => ({ feld, stufe: 'fehler', text });
 const warnung = (feld, text) => ({ feld, stufe: 'warnung', text });
@@ -266,6 +267,70 @@ export function validiereHeizkoerper(h, { bauarten, stati, ventile }) {
         ? 'Leistung fehlt: Normleistung oder Leistung je Glied mit Gliederzahl eintragen. Bis dahin gibt es keine Vorlauftemperatur für diesen Raum.'
         : 'Leistung fehlt: Bis zur Eingabe der Normleistung gibt es keine Vorlauftemperatur für diesen Raum.',
     ));
+  }
+  return meldungen;
+}
+
+// Verbrauchsabgleich. Meldungen zu den Monaten tragen feld 'monate' und, wenn sie einen Monat betreffen, monatId.
+export function validiereVerbrauch(v) {
+  const meldungen = [
+    ...pflichtText('name', v.name, 'Verbrauchsabgleich'),
+    ...zahl('gasKwh', v.gasKwh, { name: 'Gasverbrauch', einheit: 'kWh', fehlerWennKleiner: 0, warnWennUeber: 100000 }),
+    ...zahl('warmwasserKwh', v.warmwasserKwh, { name: 'Warmwasser', einheit: 'kWh', fehlerWennKleiner: 0 }),
+    ...bereich('kesselNutzungsgrad', v.kesselNutzungsgrad, {
+      name: 'Kesselnutzungsgrad', einheit: '%', fehlerWennKleinerGleich: 0, warnWennUeber: 100, warnWennUnter: 50,
+    }),
+    ...zahl('innentemperatur', v.innentemperatur, { name: 'Mittlere Innentemperatur', einheit: '°C', warnWennUeber: 25, warnWennUnter: 15 }),
+  ];
+  if (istZahl(v.gasKwh) && istZahl(v.warmwasserKwh) && v.warmwasserKwh > v.gasKwh) {
+    meldungen.push(fehler('warmwasserKwh', 'Warmwasser darf nicht größer sein als der Gasverbrauch.'));
+  }
+  if (istZahl(v.kesselNutzungsgrad?.max) && v.kesselNutzungsgrad.max > 100) {
+    meldungen.push(warnung('kesselNutzungsgrad', `Der Nutzungsgrad liegt über 100 %. ${'Bezogen auf Brennwert Hs, wie in der Gasrechnung'} sind Werte über 100 % unüblich.`));
+  }
+
+  // Holz: Menge optional, Heizwert und Wirkungsgrad dann Pflicht.
+  const holzGesetzt = v.holzRm !== null && v.holzRm !== undefined;
+  if (holzGesetzt) meldungen.push(...zahl('holzRm', v.holzRm, { name: 'Holzmenge', einheit: 'Rm', fehlerWennKleiner: 0, warnWennUeber: 30 }));
+  const mitHolz = istZahl(v.holzRm) && v.holzRm > 0;
+  for (const [feld, name, einheit, warnUeber, warnUnter] of [
+    ['heizwertRm', 'Heizwert', 'kWh/Rm', 2600, 800],
+    ['ofenWirkungsgrad', 'Wirkungsgrad Kaminofen', '%', 90, 40],
+  ]) {
+    if (v[feld]) {
+      meldungen.push(...bereich(feld, v[feld], { name, einheit, fehlerWennKleinerGleich: 0, warnWennUeber: warnUeber, warnWennUnter: warnUnter }));
+    } else if (mitHolz) {
+      meldungen.push(fehler(feld, `${name}: bitte Minimum und Maximum eintragen, weil Holz angegeben ist.`));
+    }
+  }
+
+  // Heizmonate mit Gradtagzahl G20/15 und Heiztagen.
+  const monate = v.monate ?? [];
+  const gewaehlt = monate.filter((m) => m.heizmonat);
+  let monateOk = true;
+  if (gewaehlt.length === 0) {
+    meldungen.push(fehler('monate', 'Bitte mindestens einen Heizmonat wählen und Gradtagzahl G20/15 und Heiztage eintragen.'));
+    monateOk = false;
+  }
+  for (const m of gewaehlt) {
+    const name = `Monat „${m.name || 'ohne Namen'}“`;
+    const gOk = istZahl(m.gradtage) && m.gradtage > 0;
+    const tOk = istZahl(m.heiztage) && Number.isInteger(m.heiztage) && m.heiztage >= 1 && m.heiztage <= 31;
+    if (!gOk) meldungen.push({ ...fehler('monate', `${name}: bitte die Gradtagzahl G20/15 eintragen (größer als 0).`), monatId: m.id });
+    if (!tOk) meldungen.push({ ...fehler('monate', `${name}: bitte die Heiztage als ganze Zahl von 1 bis 31 eintragen.`), monatId: m.id });
+    if (!gOk || !tOk) {
+      monateOk = false;
+    } else if (m.gradtage / m.heiztage > 30 || m.gradtage / m.heiztage < 1) {
+      meldungen.push({ ...warnung('monate', `${name}: ${zahlZuText(Math.round((m.gradtage / m.heiztage) * 10) / 10)} Kd je Heiztag ist ungewöhnlich. Bitte Gradtagzahl und Heiztage prüfen.`), monatId: m.id });
+    }
+  }
+
+  // Nach der Umrechnung auf die Innentemperatur muss die Gradtagzahl positiv bleiben.
+  if (monateOk && istZahl(v.innentemperatur)) {
+    const g = gradtage(monate, v.innentemperatur);
+    if (!(g.g > 0)) {
+      meldungen.push(fehler('innentemperatur', 'Bei dieser Innentemperatur wird die umgerechnete Gradtagzahl nicht positiv. Bitte Innentemperatur und Gradtage prüfen.'));
+    }
   }
   return meldungen;
 }

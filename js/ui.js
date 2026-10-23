@@ -198,6 +198,10 @@ export function baueFormular(felder, werte, beiAenderung = () => {}) {
   return {
     element: wurzel,
     lies: leseAlle,
+    setzeFeld(key, wert) {
+      eintragVon(key).setze(wert);
+      feldGeaendert(eintragVon(key).feld)();
+    },
     zeigeMeldungen(liste) {
       allgemein.replaceChildren();
       for (const e of eintraege) {

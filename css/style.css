@@ -242,3 +242,55 @@ button.klein { min-height: 36px; padding: 0 12px; font-size: 0.9rem; }
 .regler { flex: 1 1 220px; min-width: 160px; height: 48px; accent-color: var(--akzent); }
 .reglerzeile button { min-width: 48px; font-size: 1.3rem; padding: 0; }
 .zielwert { min-width: 64px; font-size: 1.5rem; font-weight: 700; text-align: right; }
+
+/* Verbrauchsabgleich */
+.verbrauch-layout { display: grid; gap: 16px; }
+@media (min-width: 1000px) {
+  .verbrauch-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .verbrauch-layout .rechts { position: sticky; top: 130px; max-height: calc(100vh - 150px); overflow-y: auto; }
+}
+.verbrauch-layout .rechts > section { margin-bottom: 12px; }
+
+.gegenueber { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+.zahlenkarte { padding: 12px; background: var(--bg); border: 1px solid var(--linie); border-radius: var(--radius); min-width: 0; }
+.zahlenkarte .gross { font-size: 1.5rem; overflow-wrap: anywhere; }
+.zahlenkarte .beschriftung { margin: 0 0 4px; }
+.abweichung { margin: 8px 0; font-size: 1.05rem; }
+
+.hinweisbox {
+  margin: 12px 0;
+  padding: 12px 14px;
+  color: var(--warnung);
+  background: var(--warnung-bg);
+  border-left: 5px solid var(--warnung);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+ol.annahmen { margin: 6px 0 0; padding-left: 22px; }
+ol.annahmen li { margin-bottom: 8px; }
+
+.tabellenrahmen.schmal { margin-top: 6px; }
+.monate { min-width: 0; margin: 0; }
+.monate td { padding: 4px; }
+.monate td.mitte { text-align: center; }
+.monate input[type="text"] { min-height: 44px; }
+.monate input[type="checkbox"] { width: 28px; height: 28px; }
+tr.hat-fehler td { background: var(--fehler-bg); }
+tr.hat-warnung td { background: var(--warnung-bg); }
+
+@media (max-width: 600px) {
+  .gegenueber { grid-template-columns: 1fr; }
+  /* Je Monat zwei Zeilen: Häkchen, Monat und Löschen oben, Gradtage und Heiztage nebeneinander darunter. */
+  .monate thead { display: none; }
+  .monate tr { display: grid; grid-template-columns: 40px 1fr 1fr 44px; gap: 4px 8px; padding: 8px 4px; border-bottom: 1px solid var(--linie); }
+  .monate td { display: block; border: 0; padding: 0; min-width: 0; }
+  .monate td[data-label="Heizmonat"] { grid-column: 1; grid-row: 1; }
+  .monate td[data-label="Monat"] { grid-column: 2 / 4; grid-row: 1; }
+  .monate td:last-child { grid-column: 4; grid-row: 1; }
+  .monate td[data-label="G20/15 (Kd)"] { grid-column: 2; grid-row: 2; }
+  .monate td[data-label="Heiztage"] { grid-column: 3; grid-row: 2; }
+  .monate td[data-label="G20/15 (Kd)"]::before, .monate td[data-label="Heiztage"]::before {
+    content: attr(data-label); display: block; font-size: 0.8rem; color: var(--text-leise);
+  }
+}

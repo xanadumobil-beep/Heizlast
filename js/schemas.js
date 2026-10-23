@@ -2,6 +2,7 @@
 // Die Feldlisten steuern die Formulare, die Validierung steht in validate.js.
 
 import { zahlZuText } from './engine/format.js';
+import { HS_HINWEIS } from './engine/verbrauch.js';
 
 export const BAUTEILARTEN = [
   { wert: 'aussenwand', label: 'Außenwand' },
@@ -388,6 +389,52 @@ export function heizkoerperFelder() {
     {
       key: 'ventil', label: 'Ventil', typ: 'auswahl', optionen: VENTILE,
       hinweis: 'Alte Ventile erscheinen nur als Hinweis (kein hydraulischer Abgleich möglich). Die Leistung ändert sich dadurch nicht.',
+    },
+    { key: 'notiz', label: 'Notiz', typ: 'notiz' },
+  ];
+}
+
+// --- Verbrauchsabgleich ----------------------------------------------------------------
+
+// Monate der Heizperiode in der Reihenfolge Oktober bis September, zum Anlegen einer leeren Tabelle.
+export const HEIZPERIODE_MONATE = [
+  'Oktober', 'November', 'Dezember', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September',
+];
+
+// Nutzungsgrade, Heizwerte und Gradtage werden nie vorbelegt. Nur Warmwasser startet mit 0 und die
+// Innentemperatur mit dem Vorschlag aus den Räumen (beides sichtbar und änderbar).
+export function neuerVerbrauch(innentemperatur) {
+  return {
+    name: '', gasKwh: null, warmwasserKwh: 0, kesselNutzungsgrad: { min: null, max: null },
+    holzRm: null, heizwertRm: null, ofenWirkungsgrad: null,
+    innentemperatur: innentemperatur ?? null, monate: [], notiz: '',
+  };
+}
+
+export function verbrauchFelder({ vorschlag }) {
+  return [
+    { key: 'name', label: 'Bezeichnung', typ: 'text', hinweis: 'Zum Beispiel „Heizperiode 2023/24“.' },
+    { key: 'gasKwh', label: 'Gasverbrauch im Zeitraum', typ: 'zahl', einheit: 'kWh', hinweis: 'Laut Gasrechnung in kWh.' },
+    {
+      key: 'warmwasserKwh', label: 'Davon Warmwasser (wird abgezogen)', typ: 'zahl', einheit: 'kWh',
+      hinweis: 'Gas für Warmwasser gehört nicht zur Heizung. Startwert 0: dann zählt der ganze Gasverbrauch als Heizung, und die Heizlast fällt zu hoch aus.',
+    },
+    {
+      key: 'kesselNutzungsgrad', label: 'Kesselnutzungsgrad', typ: 'bereich', einheit: '%',
+      hinweis: `Hinweis: ${HS_HINWEIS}. Minimum und Maximum geben die Unsicherheit an.`,
+    },
+    { key: 'holzRm', label: 'Holzmenge (optional)', typ: 'zahl', einheit: 'Rm', hinweis: 'Raummeter im Zeitraum. Leer oder 0: kein Holz.' },
+    {
+      key: 'heizwertRm', label: 'Heizwert je Raummeter (nur mit Holz)', typ: 'bereich', optional: true, einheit: 'kWh/Rm',
+      hinweis: 'Hängt von Holzart und Feuchte ab. Es gibt keinen Vorgabewert.',
+    },
+    { key: 'ofenWirkungsgrad', label: 'Wirkungsgrad Kaminofen (nur mit Holz)', typ: 'bereich', optional: true, einheit: '%' },
+    {
+      key: 'innentemperatur', label: 'Mittlere Innentemperatur', typ: 'zahl', einheit: '°C',
+      hinweis: 'Für die Umrechnung der Gradtage und die Hochrechnung auf die Normaußentemperatur. '
+        + (vorschlag === null
+          ? 'Ohne beheizte oder passive Räume gibt es keinen Vorschlag.'
+          : `Vorschlag: ${zahlZuText(vorschlag)} °C, der flächengewichtete Mittelwert der Soll-Temperaturen aller beheizten und passiven Räume.`),
     },
     { key: 'notiz', label: 'Notiz', typ: 'notiz' },
   ];

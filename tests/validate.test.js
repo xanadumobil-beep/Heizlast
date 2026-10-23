@@ -241,3 +241,71 @@ test('Wärmepumpen-Heizkörper braucht keine Normbedingungen', () => {
   const wp = hk({ bauart: 'wp', normleistung: null, kennlinieText: '35 600\n45 1000', normVorlauf: null, normRuecklauf: null, normRaum: null });
   wahr(validiereHeizkoerper(wp, hkOptionen).length === 0, 'Kennlinie genügt');
 });
+
+// --- Verbrauchsabgleich ----------------------------------------------------------------
+
+import { validiereVerbrauch } from '../js/validate.js';
+import { neuerVerbrauch } from '../js/schemas.js';
+
+const verbrauch = (extra = {}) => ({
+  name: 'Heizperiode', gasKwh: 20000, warmwasserKwh: 3000, kesselNutzungsgrad: { min: 90, max: 95 },
+  holzRm: null, heizwertRm: null, ofenWirkungsgrad: null, innentemperatur: 21,
+  monate: [{ id: 'm1', name: 'Januar', gradtage: 650, heiztage: 31, heizmonat: true }], ...extra,
+});
+
+test('Neuer Verbrauchsabgleich: keine erfundenen Werte außer Warmwasser 0 und dem Innentemperatur-Vorschlag', () => {
+  const neu = neuerVerbrauch(18.6);
+  wahr(neu.gasKwh === null && neu.holzRm === null, 'Gas und Holz leer');
+  wahr(neu.kesselNutzungsgrad.min === null && neu.kesselNutzungsgrad.max === null, 'Nutzungsgrad leer');
+  wahr(neu.heizwertRm === null && neu.ofenWirkungsgrad === null, 'Heizwert und Wirkungsgrad leer');
+  wahr(neu.warmwasserKwh === 0 && neu.innentemperatur === 18.6, 'Warmwasser 0, Innentemperatur Vorschlag');
+  wahr(neu.monate.length === 0, 'keine Monate vorbelegt');
+});
+
+test('Verbrauchsabgleich: vollständige Angaben ohne Meldung', () => {
+  wahr(validiereVerbrauch(verbrauch()).length === 0, 'keine Meldung erwartet');
+});
+
+test('Verbrauchsabgleich: Pflichtangaben fehlen', () => {
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ name: '' }))), 'Name');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ gasKwh: null }))), 'Gas');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ kesselNutzungsgrad: { min: null, max: null } }))), 'Nutzungsgrad');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ innentemperatur: null }))), 'Innentemperatur');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ kesselNutzungsgrad: { min: 95, max: 90 } }))), 'Minimum über Maximum');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ warmwasserKwh: 25000 }))), 'Warmwasser über Gas');
+});
+
+test('Verbrauchsabgleich: Holz verlangt Heizwert und Wirkungsgrad', () => {
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ holzRm: 4 }))), 'Holz ohne Heizwert');
+  const komplett = verbrauch({ holzRm: 4, heizwertRm: { min: 1800, max: 2000 }, ofenWirkungsgrad: { min: 70, max: 80 } });
+  wahr(validiereVerbrauch(komplett).length === 0, 'Holz vollständig');
+  wahr(!hatFehler(validiereVerbrauch(verbrauch({ holzRm: 0 }))), '0 Rm braucht nichts');
+});
+
+test('Verbrauchsabgleich: Heizmonate wählen und vollständig ausfüllen', () => {
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ monate: [] }))), 'ohne Monate');
+  const abgewaehlt = [{ id: 'm1', name: 'Januar', gradtage: 650, heiztage: 31, heizmonat: false }];
+  wahr(feldMeldung(validiereVerbrauch(verbrauch({ monate: abgewaehlt })), 'monate', 'fehler'), 'kein Monat gewählt');
+  const ohneG = [{ id: 'm1', name: 'Januar', gradtage: null, heiztage: 31, heizmonat: true }];
+  const m = validiereVerbrauch(verbrauch({ monate: ohneG })).find((x) => x.feld === 'monate');
+  wahr(m && m.monatId === 'm1' && m.text.includes('Januar'), 'Meldung nennt den Monat');
+  const halbe = [{ id: 'm1', name: 'Januar', gradtage: 650, heiztage: 31.5, heizmonat: true }];
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ monate: halbe }))), 'Heiztage müssen ganzzahlig sein');
+  const zuviele = [{ id: 'm1', name: 'Januar', gradtage: 650, heiztage: 40, heizmonat: true }];
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ monate: zuviele }))), 'mehr als 31 Heiztage');
+});
+
+test('Verbrauchsabgleich: nicht gewählte, unvollständige Monate stören nicht', () => {
+  const monate = [
+    { id: 'm1', name: 'Januar', gradtage: 650, heiztage: 31, heizmonat: true },
+    { id: 'm2', name: 'Mai', gradtage: null, heiztage: null, heizmonat: false },
+  ];
+  wahr(validiereVerbrauch(verbrauch({ monate })).length === 0, 'Mai ist abgewählt');
+});
+
+test('Verbrauchsabgleich: ungewöhnliche Gradtage je Heiztag und nicht positive Gradtagzahl', () => {
+  const viel = [{ id: 'm1', name: 'Januar', gradtage: 1500, heiztage: 31, heizmonat: true }];
+  wahr(hatWarnungen(validiereVerbrauch(verbrauch({ monate: viel }))), '48 Kd je Tag ist ungewöhnlich');
+  const wenig = [{ id: 'm1', name: 'Januar', gradtage: 100, heiztage: 10, heizmonat: true }];
+  wahr(feldMeldung(validiereVerbrauch(verbrauch({ monate: wenig, innentemperatur: 5 })), 'innentemperatur', 'fehler'), 'G nach Umrechnung nicht positiv');
+});
