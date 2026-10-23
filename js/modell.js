@@ -124,3 +124,41 @@ function gegenseitenHinweise(raeume) {
   }
   return hinweise;
 }
+
+// --- Stabile Kennungen ---------------------------------------------------------------
+//
+// Jede Öffnung (eingebettet in einer Raumfläche) und jeder Heizkörper hat eine dauerhafte,
+// eindeutige ID. Sie bleibt bei Bearbeitung, Export und Import erhalten, denn Fotomarkierungen
+// (Stufe 2) verweisen darauf. Fehlende oder doppelte IDs innerhalb einer Raumfläche werden ergänzt,
+// vorhandene IDs werden nie geändert. neueId erzeugt eine frische ID (db.neueId).
+export function mitStabilenIds(store, objekt, neueId) {
+  if (store === 'radiators') return objekt.id ? objekt : { ...objekt, id: neueId() };
+  if (store !== 'surfaces' || !Array.isArray(objekt.oeffnungen)) return objekt;
+
+  const gesehen = new Set();
+  let geaendert = false;
+  const oeffnungen = objekt.oeffnungen.map((o) => {
+    if (o.id && !gesehen.has(o.id)) {
+      gesehen.add(o.id);
+      return o;
+    }
+    geaendert = true;
+    const id = neueId();
+    gesehen.add(id);
+    return { ...o, id };
+  });
+  return geaendert ? { ...objekt, oeffnungen } : objekt;
+}
+
+// Doppelt vergebene IDs im ganzen Projekt (Öffnungen aller Flächen und Heizkörper).
+// Beim Import prüft das, ob die Kennungen wirklich eindeutig sind.
+export function doppelteIds({ flaechen, heizkoerper = [] }) {
+  const zaehler = new Map();
+  const merke = (art, id) => {
+    const schluessel = `${art}:${id}`;
+    zaehler.set(schluessel, (zaehler.get(schluessel) ?? 0) + 1);
+  };
+  for (const f of flaechen) for (const o of f.oeffnungen ?? []) merke('oeffnung', o.id);
+  for (const h of heizkoerper) merke('heizkoerper', h.id);
+  return [...zaehler].filter(([, n]) => n > 1).map(([schluessel]) => schluessel);
+}

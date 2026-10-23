@@ -148,3 +148,45 @@ test('Hinweis, wenn der wärmere Raum die Gegenseite nicht führt', () => {
   const { hinweise } = baueRechenEingabe(projekt);
   wahr(hinweise.some((h) => h.art === 'gegenseite_fehlt' && h.raumId === 'r1' && h.nachbarId === 'bad'), 'Hinweis fehlt');
 });
+
+// --- Stabile Kennungen -----------------------------------------------------------------
+
+import { mitStabilenIds, doppelteIds } from '../js/modell.js';
+
+const zaehlerId = () => {
+  let n = 0;
+  return () => `neu-${++n}`;
+};
+
+test('Öffnungen ohne ID bekommen eine, vorhandene IDs bleiben unverändert', () => {
+  const flaeche = { id: 'f1', oeffnungen: [{ id: 'o-alt' }, { typId: 't' }] };
+  const ergebnis = mitStabilenIds('surfaces', flaeche, zaehlerId());
+  wahr(ergebnis.oeffnungen[0].id === 'o-alt', 'vorhandene ID bleibt');
+  wahr(ergebnis.oeffnungen[1].id === 'neu-1', 'fehlende ID wird ergänzt');
+});
+
+test('Stabile IDs: zweites Speichern ändert nichts (idempotent), Export und Import erhalten sie', () => {
+  const einmal = mitStabilenIds('surfaces', { id: 'f1', oeffnungen: [{ typId: 't' }, { typId: 't' }] }, zaehlerId());
+  const zweimal = mitStabilenIds('surfaces', einmal, zaehlerId());
+  wahr(zweimal === einmal, 'Objekt bleibt unverändert, wenn alle IDs da sind');
+  const ausJson = JSON.parse(JSON.stringify(einmal));
+  wahr(ausJson.oeffnungen.map((o) => o.id).join() === einmal.oeffnungen.map((o) => o.id).join(), 'IDs überstehen JSON');
+  wahr(new Set(einmal.oeffnungen.map((o) => o.id)).size === 2, 'IDs sind eindeutig');
+});
+
+test('Doppelte ID innerhalb einer Fläche: die zweite bekommt eine neue', () => {
+  const ergebnis = mitStabilenIds('surfaces', { id: 'f1', oeffnungen: [{ id: 'x' }, { id: 'x' }] }, zaehlerId());
+  wahr(ergebnis.oeffnungen[0].id === 'x' && ergebnis.oeffnungen[1].id === 'neu-1', 'erste bleibt, zweite wird ersetzt');
+});
+
+test('Heizkörper behalten ihre ID, ohne ID bekommen sie eine', () => {
+  wahr(mitStabilenIds('radiators', { id: 'hk-1' }, zaehlerId()).id === 'hk-1', 'vorhandene ID');
+  wahr(mitStabilenIds('radiators', { raumId: 'r' }, zaehlerId()).id === 'neu-1', 'neue ID');
+});
+
+test('Doppelte IDs im Projekt werden gefunden (Öffnungen aller Flächen, Heizkörper)', () => {
+  const flaechen = [{ id: 'a', oeffnungen: [{ id: 'o1' }] }, { id: 'b', oeffnungen: [{ id: 'o1' }, { id: 'o2' }] }];
+  const doppelt = doppelteIds({ flaechen, heizkoerper: [{ id: 'h1' }, { id: 'h1' }, { id: 'h2' }] });
+  wahr(doppelt.includes('oeffnung:o1') && doppelt.includes('heizkoerper:h1'), 'beide Dopplungen gefunden');
+  wahr(doppelt.length === 2, 'sonst nichts');
+});

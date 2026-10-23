@@ -65,24 +65,29 @@ function meldungsTexte(projekt, ergebnis, hinweise) {
     if (w.art === 'gegenprobe') {
       const betrag = formatZahl(Math.abs(w.differenz), 1);
       texte.push({
-        stufe: 'fehler',
+        stufe: 'fehler', art: w.art, raumId: null,
         text: `Gegenprobe (${FALL_NAME[w.fall]}): Die Raumheizlasten weichen um ${betrag} W von der Gebäudesumme ab, `
           + `${w.differenz > 0 ? `es fehlen ${betrag} W in den Raumheizlasten` : `${betrag} W sind doppelt gezählt`}. `
           + 'Meist stimmt die Verteilung eines passiven Raums nicht auf 100 %.',
       });
     } else if (w.art === 'passiv_verteilung') {
       texte.push({
-        stufe: 'warnung',
+        stufe: 'warnung', art: w.art, raumId: w.raumId,
         text: `Passiver Raum „${raumName(projekt, w.raumId)}“: Die Wärmelieferanten ergeben ${formatZahl(w.summe, 1)} % statt 100 %.`,
       });
     } else if (w.art === 'lieferant_kein_beheizter_raum') {
       texte.push({
-        stufe: 'warnung',
+        stufe: 'warnung', art: w.art, raumId: w.raumId,
         text: `Passiver Raum „${raumName(projekt, w.raumId)}“: „${raumName(projekt, w.lieferantId)}“ ist kein beheizter Raum und liefert keine Wärme.`,
+      });
+    } else if (w.art === 'passiv_ohne_anteil') {
+      texte.push({
+        stufe: 'warnung', art: w.art, raumId: w.raumId, proRaum: true,
+        text: `Grenzt an passiven Raum „${raumName(projekt, w.passivId)}“ ohne Wärmeanteil, Raumheizlast möglicherweise zu niedrig.`,
       });
     } else if (w.art === 'gegenraum_unbrauchbar') {
       texte.push({
-        stufe: 'warnung',
+        stufe: 'warnung', art: w.art, raumId: w.raumId,
         text: `Raum „${raumName(projekt, w.raumId)}“: Eine Fläche grenzt an ${w.grund === 'nachbar_unbeheizt'
           ? 'einen unbeheizten Raum (bitte stattdessen eine Zone verwenden)' : 'einen nicht mehr vorhandenen Raum'}.`,
       });
@@ -103,7 +108,7 @@ function meldungsTexte(projekt, ergebnis, hinweise) {
         + `aber „${raumName(projekt, h.nachbarId)}“ führt keine Fläche zu „${raumName(projekt, h.raumId)}“. `
         + 'Der Wärmeverlust des wärmeren Raums an diese Wand wird dadurch nicht angerechnet.',
     }[h.art];
-    if (nachricht) texte.push({ stufe: 'warnung', text: nachricht });
+    if (nachricht) texte.push({ stufe: 'warnung', art: h.art, raumId: h.raumId, text: nachricht });
   }
   return texte;
 }
@@ -412,7 +417,7 @@ function gebaeudeBlock(ergebnis) {
   );
 }
 
-function raumKarte(projekt, ergebnis, raum, neuLaden) {
+function raumKarte(projekt, ergebnis, raum, neuLaden, raumMeldungen = []) {
   const r = ergebnis?.raeume.find((x) => x.id === raum.id) ?? null;
   const volumen = raumVolumen(raum);
   const kopfzeile = [
@@ -448,6 +453,7 @@ function raumKarte(projekt, ergebnis, raum, neuLaden) {
     el('h3', {}, raum.name, el('span', { class: raum.status === 'beheizt' ? 'marke ruhig' : 'marke' }, label(STATI, raum.status))),
     el('p', { class: 'zeile' }, kopfzeile),
     ...inhalt,
+    ...meldungsBlock(raumMeldungen),
     raum.notiz ? el('p', { class: 'zeile notiz' }, raum.notiz) : null,
     el(
       'div', { class: 'knopfzeile' },
@@ -462,7 +468,8 @@ export async function renderRaeume(container, neuLaden) {
   const projekt = await ladeProjekt();
   const { ergebnis, hinweise, fehler } = rechne(projekt);
 
-  const meldungen = meldungsTexte(projekt, ergebnis, hinweise);
+  const alleMeldungen = meldungsTexte(projekt, ergebnis, hinweise);
+  const meldungen = alleMeldungen.filter((m) => !m.proRaum);
   ersetzeKinder(container, 
     el(
       'div', { class: 'kopf' },
@@ -477,7 +484,7 @@ export async function renderRaeume(container, neuLaden) {
     ...meldungsBlock(meldungen),
     ergebnis && ergebnis.raeume.length > 0 ? gebaeudeBlock(ergebnis) : null,
     projekt.raeume.length > 0
-      ? el('div', { class: 'karten' }, projekt.raeume.map((raum) => raumKarte(projekt, ergebnis, raum, neuLaden)))
+      ? el('div', { class: 'karten' }, projekt.raeume.map((raum) => raumKarte(projekt, ergebnis, raum, neuLaden, alleMeldungen.filter((m) => m.proRaum && m.raumId === raum.id))))
       : el('p', { class: 'leer' }, 'Noch keine Räume. Lege zuerst unter „Bauteile“ und „Zonen“ die Grundlagen an, dann mit „+ Raum“ den ersten Raum.'),
   );
 }
@@ -499,7 +506,7 @@ export async function renderRaum(container, raumId, neuLaden) {
   const r = ergebnis?.raeume.find((x) => x.id === raum.id) ?? null;
   const eigeneFlaechen = projekt.flaechen.filter((f) => f.raumId === raum.id);
   const fremdeFlaechen = projekt.flaechen.filter((f) => f.raumId !== raum.id && f.angrenzend?.raumId === raum.id);
-  const meldungen = meldungsTexte(projekt, ergebnis, hinweise).filter((m) => m.text.includes(`„${raum.name}“`));
+  const meldungen = meldungsTexte(projekt, ergebnis, hinweise).filter((m) => m.raumId === raum.id);
 
   const zeilenTabelle = () => {
     const f = (a, b, c) => ({ zellen: [a, ...[b, c, (b + c) / 2].map(watt)] });

@@ -493,3 +493,27 @@ test('Dezimalkomma wird als Zahl gelesen', () => {
 test('Anzeige mit Dezimalkomma', () => {
   wahr(formatZahl(368.7, 1) === '368,7', 'Anzeige 368,7 erwartet');
 });
+
+// --- Hinweis: beheizter Raum grenzt an passiven Raum ohne Wärmeanteil ---------------
+//
+// In Beispiel D grenzt B1 über die Wand b1-p an den passiven Raum P (und P über p-b1 an B1).
+// Erhält B1 keinen Anteil, ist seine Raumheizlast möglicherweise zu niedrig: Hinweis genau einmal.
+// Verteilung 100 % auf B2: B2 grenzt nicht an P, B1 grenzt an P und hat 0 %.
+test('Hinweis: beheizter Raum grenzt an passiven Raum, erhält aber 0 %', () => {
+  const ergebnis = berechneGebaeude(beispielD({ verteilung: [{ raumId: 'b2', prozent: 100 }] }));
+  const treffer = ergebnis.warnungen.filter((w) => w.art === 'passiv_ohne_anteil');
+  wahr(treffer.length === 1, `genau ein Hinweis erwartet, gefunden: ${treffer.length}`);
+  wahr(treffer[0].raumId === 'b1' && treffer[0].passivId === 'p', 'Hinweis gehört zu B1 und P');
+});
+
+test('Hinweis entfällt, wenn der angrenzende Raum einen Anteil erhält', () => {
+  const ergebnis = berechneGebaeude(beispielD());
+  wahr(!ergebnis.warnungen.some((w) => w.art === 'passiv_ohne_anteil'), 'bei 60 % / 40 % kein Hinweis');
+});
+
+test('Hinweis erkennt die Grenze auch, wenn nur der passive Raum die Fläche führt', () => {
+  const eingabe = beispielD({ verteilung: [{ raumId: 'b2', prozent: 100 }] });
+  eingabe.raeume.find((r) => r.id === 'b1').flaechen = eingabe.raeume.find((r) => r.id === 'b1').flaechen.filter((f) => f.id !== 'b1-p');
+  const ergebnis = berechneGebaeude(eingabe);
+  wahr(ergebnis.warnungen.some((w) => w.art === 'passiv_ohne_anteil' && w.raumId === 'b1'), 'Hinweis über die Fläche p-b1');
+});

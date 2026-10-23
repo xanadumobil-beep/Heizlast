@@ -7,6 +7,7 @@
 //   scenarios       (Stufe 3: Szenarien mit überschriebenen U-Werten und Heizkörper-Status)
 
 import { standardEinstellungen, standardZonen } from './schemas.js';
+import { mitStabilenIds } from './modell.js';
 
 const DB_NAME = 'heizlast';
 const DB_VERSION = 1;
@@ -49,7 +50,8 @@ async function ausfuehren(store, modus, aktion) {
 
 export const alle = (store) => ausfuehren(store, 'readonly', (s) => s.getAll());
 export const lade = (store, id) => ausfuehren(store, 'readonly', (s) => s.get(id));
-export const speichere = (store, objekt) => ausfuehren(store, 'readwrite', (s) => s.put(objekt));
+// Beim Speichern bekommen Öffnungen und Heizkörper, falls nötig, eine dauerhafte ID (siehe mitStabilenIds).
+export const speichere = (store, objekt) => ausfuehren(store, 'readwrite', (s) => s.put(mitStabilenIds(store, objekt, neueId)));
 export const loesche = (store, id) => ausfuehren(store, 'readwrite', (s) => s.delete(id));
 
 export function neueId() {

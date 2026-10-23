@@ -167,6 +167,24 @@ function berechneFall(rechenbare, ctx, fall) {
     }
   }
 
+  // Ein beheizter Raum, der an einen passiven Raum grenzt, aber 0 % von dessen Verteilung erhält,
+  // bekommt den Wärmebedarf des passiven Raums nicht zugerechnet: seine Raumheizlast ist dann
+  // möglicherweise zu niedrig. Die Grenzfläche kann in einem der beiden Räume geführt sein.
+  const paare = new Map();
+  for (const r of rechenbare) {
+    for (const f of r.flaechen ?? []) {
+      if (f.angrenzend.art !== 'raum') continue;
+      const nachbar = ctx.raumKarte.get(f.angrenzend.raumId);
+      if (!nachbar) continue;
+      if (r.status === 'beheizt' && nachbar.status === 'passiv') paare.set(`${r.id}>${nachbar.id}`, [r.id, nachbar.id]);
+      if (r.status === 'passiv' && nachbar.status === 'beheizt') paare.set(`${nachbar.id}>${r.id}`, [nachbar.id, r.id]);
+    }
+  }
+  for (const [beheiztId, passivId] of paare.values()) {
+    const anteil = ctx.raumKarte.get(passivId).waermeLieferanten?.find((l) => l.raumId === beheiztId)?.prozent ?? 0;
+    if (!(anteil > 0)) warnungen.push({ art: 'passiv_ohne_anteil', raumId: beheiztId, passivId });
+  }
+
   // Heizlast beheizter Räume beginnt mit dem eigenen Netto-Verlust (inklusive angerechneter
   // Raum-zu-Raum-Verluste). Diese Ströme heben sich im Gebäude auf und stehen nicht in der Gebäudesumme.
   const heizlast = new Map();
