@@ -138,3 +138,64 @@ export function validiereRaum(raum) {
   }
   return meldungen;
 }
+
+// Raummaske: Zahlenregeln aus validiereRaum plus Status, Geschoss und manuelles Volumen.
+// Eine unbeheizte Zone braucht keine Soll-Temperatur.
+export function validiereRaumEingabe(raum, { stati, geschosse }) {
+  const ohneTemperatur = raum.status === 'unbeheizt' && (raum.theta === null || raum.theta === undefined);
+  const meldungen = validiereRaum(ohneTemperatur ? { ...raum, theta: 20 } : raum);
+  meldungen.push(
+    ...ausListe('status', raum.status, stati, 'Status'),
+    ...ausListe('geschoss', raum.geschoss, geschosse, 'Geschoss'),
+  );
+  if (raum.volumenManuell !== null && raum.volumenManuell !== undefined) {
+    meldungen.push(...zahl('volumenManuell', raum.volumenManuell, {
+      name: 'Volumen', einheit: 'm³', fehlerWennKleinerGleich: 0, warnWennUeber: 500,
+    }));
+  }
+  return meldungen;
+}
+
+const MASSARTEN = ['laengeHoehe', 'flaeche'];
+
+// Maße als Länge × Höhe oder direkte Fläche. Null wird markiert, negative Werte blockieren.
+function masse(eintrag, grenzen) {
+  const meldungen = [...ausListe('modus', eintrag.modus, MASSARTEN, 'Maße')];
+  const nullWarnung = (feld, wert, name) => (wert === 0 ? [warnung(feld, `${name} ist 0. Bitte prüfen.`)] : []);
+  if (eintrag.modus === 'flaeche') {
+    meldungen.push(
+      ...zahl('flaeche', eintrag.flaeche, { name: 'Fläche', einheit: 'm²', fehlerWennKleiner: 0, warnWennUeber: grenzen.flaecheMax }),
+      ...nullWarnung('flaeche', eintrag.flaeche, 'Fläche'),
+    );
+  } else {
+    meldungen.push(
+      ...zahl('laenge', eintrag.laenge, { name: grenzen.laengeName, einheit: 'm', fehlerWennKleiner: 0, warnWennUeber: grenzen.laengeMax }),
+      ...nullWarnung('laenge', eintrag.laenge, grenzen.laengeName),
+      ...zahl('hoehe', eintrag.hoehe, { name: 'Höhe', einheit: 'm', fehlerWennKleiner: 0, warnWennUeber: grenzen.hoeheMax }),
+      ...nullWarnung('hoehe', eintrag.hoehe, 'Höhe'),
+    );
+  }
+  return meldungen;
+}
+
+// Raumfläche: Bauteil aus dem Katalog, Gegenseite und Maße.
+export function validiereFlaeche(flaeche, { bauteilIds, angrenzendWerte }) {
+  return [
+    ...(bauteilIds.includes(flaeche.bauteilId) ? [] : [fehler('bauteilId', 'Bauteil: bitte ein Bauteil aus dem Katalog wählen.')]),
+    ...ausListe('angrenzendWahl', flaeche.angrenzendWahl, angrenzendWerte, 'Grenzt an'),
+    ...masse(flaeche, { laengeName: 'Länge', laengeMax: 30, hoeheMax: 6, flaecheMax: 150 }),
+  ];
+}
+
+// Öffnung in einer Raumfläche: Typ aus dem Katalog, Maße und Anzahl (ganze Zahl ab 1).
+export function validiereOeffnungEintrag(oeffnung, { typIds }) {
+  const meldungen = [
+    ...(typIds.includes(oeffnung.typId) ? [] : [fehler('typId', 'Öffnungstyp: bitte einen Typ aus dem Katalog wählen.')]),
+    ...masse(oeffnung, { laengeName: 'Breite', laengeMax: 6, hoeheMax: 4, flaecheMax: 15 }),
+    ...zahl('anzahl', oeffnung.anzahl, { name: 'Anzahl', fehlerWennKleiner: 1, warnWennUeber: 20 }),
+  ];
+  if (istZahl(oeffnung.anzahl) && !Number.isInteger(oeffnung.anzahl)) {
+    meldungen.push(fehler('anzahl', 'Anzahl: bitte eine ganze Zahl eingeben.'));
+  }
+  return meldungen;
+}

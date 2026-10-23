@@ -173,3 +173,49 @@ dialog .knopfzeile { justify-content: flex-end; position: sticky; bottom: -20px;
   main { padding: 12px; }
   .bereich { grid-template-columns: 1fr; }
 }
+
+/* Ausgeblendete Felder (bedingt sichtbar) */
+[hidden] { display: none !important; }
+
+.abschnitt { padding-top: 8px; border-top: 1px solid var(--linie); }
+.abschnitt h3 { margin: 0 0 2px; }
+
+/* Räume und Ergebnisse */
+a.knopf {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ziel);
+  padding: 0 18px;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: var(--radius);
+}
+a.knopf.primaer { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); font-weight: 600; }
+
+button.klein { min-height: 36px; padding: 0 12px; font-size: 0.9rem; }
+.abstand { margin-top: 20px; }
+.leise { color: var(--text-leise); }
+.notiz { white-space: pre-wrap; border-left: 3px solid var(--linie); padding-left: 10px; }
+.marke.ruhig { color: var(--text-leise); background: var(--bg); }
+
+.gebaeude { margin-bottom: 16px; }
+.gross { margin: 0; font-size: 2rem; font-weight: 700; }
+
+.tabelle { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 0.95rem; }
+.tabelle th, .tabelle td { padding: 6px 8px; border-bottom: 1px solid var(--linie); text-align: left; font-weight: normal; }
+.tabelle thead th { font-weight: 600; color: var(--text-leise); }
+.tabelle .zahl { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tabelle tr.summe th, .tabelle tr.summe td { font-weight: 700; border-top: 2px solid var(--text-leise); }
+.tabelle tr.abweichung th, .tabelle tr.abweichung td { color: var(--fehler); font-weight: 700; }
+
+.raumzuraum { margin: 8px 0; }
+.raumzuraum ul, .oeffnungen { margin: 4px 0; padding-left: 20px; }
+.oeffnungen li { margin: 6px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.oeffnungen li > span { flex: 1 1 220px; }
+
+@media (max-width: 520px) {
+  .tabelle { font-size: 0.85rem; }
+  .tabelle th, .tabelle td { padding: 6px 4px; }
+}

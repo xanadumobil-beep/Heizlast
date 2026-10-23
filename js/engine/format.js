@@ -17,7 +17,16 @@ export function zahlZuText(wert) {
   return String(wert).replace('.', ',');
 }
 
+// Von–bis-Anzeige. Runden beide Enden gleich, erscheint nur ein Wert.
+export function formatBereich(von, bis, nachkommastellen = 0) {
+  const a = formatZahl(Math.min(von, bis), nachkommastellen);
+  const b = formatZahl(Math.max(von, bis), nachkommastellen);
+  return a === b ? a : `${a} – ${b}`;
+}
+
 export function formatZahl(wert, nachkommastellen = 1) {
   if (wert === null || wert === undefined || Number.isNaN(wert)) return '–';
-  return wert.toFixed(nachkommastellen).replace('.', ',');
+  const text = wert.toFixed(nachkommastellen);
+  // Ein auf null gerundeter negativer Wert zeigt kein Minuszeichen ("-0" wäre irreführend).
+  return (Number(text) === 0 ? text.replace('-', '') : text).replace('.', ',');
 }

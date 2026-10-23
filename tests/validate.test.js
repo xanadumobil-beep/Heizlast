@@ -84,3 +84,61 @@ test('Zahlen erscheinen mit Komma im Eingabefeld', () => {
   wahr(zahlZuText(-8) === '-8', '-8');
   wahr(zahlZuText(null) === '', 'null ist leer');
 });
+
+// --- Räume, Raumflächen, Öffnungen -----------------------------------------------------
+
+import {
+  validiereRaumEingabe, validiereFlaeche, validiereOeffnungEintrag,
+} from '../js/validate.js';
+import { STATI, GESCHOSSE } from '../js/schemas.js';
+
+const raumOptionen = { stati: werte(STATI), geschosse: werte(GESCHOSSE) };
+const flaechenOptionen = { bauteilIds: ['b1'], angrenzendWerte: ['aussen', 'raum:r1'] };
+
+test('Raummaske: unbeheizter Raum braucht keine Soll-Temperatur, beheizter schon', () => {
+  const raum = (status, theta) => ({
+    name: 'R', geschoss: 'EG', status, theta, flaeche: 12, hoehe: 2.5, volumenManuell: null, luftwechsel: null,
+  });
+  wahr(!hatFehler(validiereRaumEingabe(raum('unbeheizt', null), raumOptionen)), 'unbeheizt ohne Temperatur');
+  wahr(hatFehler(validiereRaumEingabe(raum('beheizt', null), raumOptionen)), 'beheizt ohne Temperatur');
+  wahr(hatFehler(validiereRaumEingabe({ ...raum('beheizt', 20), status: 'kaputt' }, raumOptionen)), 'ungültiger Status');
+});
+
+test('Raummaske: manuelles Volumen muss positiv sein, leer ist erlaubt', () => {
+  const raum = (volumenManuell) => ({
+    name: 'R', geschoss: 'EG', status: 'beheizt', theta: 20, flaeche: 12, hoehe: 2.5, volumenManuell, luftwechsel: null,
+  });
+  wahr(validiereRaumEingabe(raum(null), raumOptionen).length === 0, 'leer');
+  wahr(hatFehler(validiereRaumEingabe(raum(0), raumOptionen)), 'Volumen 0');
+  wahr(hatFehler(validiereRaumEingabe(raum(NaN), raumOptionen)), 'Volumen unlesbar');
+});
+
+test('Raumfläche: Bauteil und Gegenseite sind Pflicht, Maße je nach Maßart', () => {
+  const basisFlaeche = { bauteilId: 'b1', angrenzendWahl: 'aussen', modus: 'laengeHoehe', laenge: 4, hoehe: 2.5 };
+  wahr(validiereFlaeche(basisFlaeche, flaechenOptionen).length === 0, 'gültige Fläche');
+  wahr(feldMeldung(validiereFlaeche({ ...basisFlaeche, bauteilId: '' }, flaechenOptionen), 'bauteilId', 'fehler'), 'Bauteil fehlt');
+  wahr(feldMeldung(validiereFlaeche({ ...basisFlaeche, angrenzendWahl: '' }, flaechenOptionen), 'angrenzendWahl', 'fehler'), 'Gegenseite fehlt');
+  wahr(feldMeldung(validiereFlaeche({ ...basisFlaeche, laenge: null }, flaechenOptionen), 'laenge', 'fehler'), 'Länge fehlt');
+  wahr(hatFehler(validiereFlaeche({ ...basisFlaeche, modus: 'flaeche', flaeche: null }, flaechenOptionen)), 'Fläche fehlt');
+  // Bei direkter Fläche zählen Länge und Höhe nicht.
+  wahr(!hatFehler(validiereFlaeche({ ...basisFlaeche, modus: 'flaeche', flaeche: 10, laenge: null, hoehe: null }, flaechenOptionen)), 'direkte Fläche');
+});
+
+test('Raumfläche: Fläche 0 und Höhe über 6 m werden markiert, bleiben aber speicherbar', () => {
+  const basisFlaeche = { bauteilId: 'b1', angrenzendWahl: 'aussen', modus: 'laengeHoehe', laenge: 4, hoehe: 2.5 };
+  const null0 = validiereFlaeche({ ...basisFlaeche, modus: 'flaeche', flaeche: 0 }, flaechenOptionen);
+  wahr(feldMeldung(null0, 'flaeche', 'warnung') && !hatFehler(null0), 'Fläche 0');
+  const hoch = validiereFlaeche({ ...basisFlaeche, hoehe: 6.5 }, flaechenOptionen);
+  wahr(feldMeldung(hoch, 'hoehe', 'warnung') && !hatFehler(hoch), 'Höhe 6,5');
+});
+
+test('Öffnung: Typ und Maße, Anzahl nur als ganze Zahl ab 1', () => {
+  const o = { typId: 't1', modus: 'laengeHoehe', laenge: 1.2, hoehe: 1.4, anzahl: 2 };
+  const optionen = { typIds: ['t1'] };
+  wahr(validiereOeffnungEintrag(o, optionen).length === 0, 'gültige Öffnung');
+  wahr(hatFehler(validiereOeffnungEintrag({ ...o, typId: '' }, optionen)), 'Typ fehlt');
+  wahr(hatFehler(validiereOeffnungEintrag({ ...o, anzahl: 0 }, optionen)), 'Anzahl 0');
+  wahr(hatFehler(validiereOeffnungEintrag({ ...o, anzahl: 1.5 }, optionen)), 'Anzahl 1,5');
+  wahr(hatFehler(validiereOeffnungEintrag({ ...o, anzahl: null }, optionen)), 'Anzahl leer');
+  wahr(hatFehler(validiereOeffnungEintrag({ ...o, laenge: null }, optionen)), 'Breite fehlt');
+});

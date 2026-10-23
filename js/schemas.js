@@ -33,6 +33,27 @@ export const OEFFNUNGSARTEN = [
   { wert: 'tuer', label: 'Tür' },
 ];
 
+export const GESCHOSSE = [
+  { wert: 'EG', label: 'EG' },
+  { wert: 'Keller', label: 'Keller' },
+];
+
+export const STATI = [
+  { wert: 'beheizt', label: 'Beheizt' },
+  { wert: 'passiv', label: 'Passiv mitbeheizt' },
+  { wert: 'unbeheizt', label: 'Unbeheizt (wird nicht gerechnet)' },
+];
+
+export const MASSARTEN_FLAECHE = [
+  { wert: 'laengeHoehe', label: 'Länge × Höhe' },
+  { wert: 'flaeche', label: 'Fläche direkt' },
+];
+
+export const MASSARTEN_OEFFNUNG = [
+  { wert: 'laengeHoehe', label: 'Breite × Höhe' },
+  { wert: 'flaeche', label: 'Fläche direkt' },
+];
+
 export const werte = (liste) => liste.map((o) => o.wert);
 export const label = (liste, wert) => liste.find((o) => o.wert === wert)?.label ?? '–';
 
@@ -131,3 +152,113 @@ export const oeffnungsZeilen = (o) => [
   `${label(OEFFNUNGSARTEN, o.art)} · Uw ${zahlZuText(o.uw)} W/(m²K)`,
   `Quelle: ${label(QUELLEN, o.quelle)}`,
 ];
+
+// --- Räume, Raumflächen, Öffnungen ------------------------------------------------------
+
+export function neuerRaum() {
+  return {
+    name: '', geschoss: 'EG', status: 'beheizt', theta: 20, flaeche: null, hoehe: null,
+    volumenManuell: null, luftwechsel: null, waermeLieferanten: [], notiz: '',
+  };
+}
+
+// Felder der Raummaske. Für jeden beheizten Raum gibt es ein Prozentfeld, das nur bei
+// passivem Status erscheint: so ordnest du zu, welche Räume die Wärme eines passiven Raums liefern.
+export function raumFelder(lieferantenKandidaten) {
+  const sichtbarBeiPassiv = { feld: 'status', wert: 'passiv' };
+  return [
+    { key: 'name', label: 'Name', typ: 'text' },
+    { key: 'geschoss', label: 'Geschoss', typ: 'auswahl', optionen: GESCHOSSE },
+    { key: 'status', label: 'Status', typ: 'auswahl', optionen: STATI },
+    {
+      key: 'theta', label: 'Soll-Temperatur', typ: 'zahl', einheit: '°C',
+      hinweis: 'Bei passiv mitbeheizten Räumen die angenommene Temperatur.',
+    },
+    { key: 'flaeche', label: 'Fläche', typ: 'zahl', einheit: 'm²' },
+    { key: 'hoehe', label: 'Lichte Höhe', typ: 'zahl', einheit: 'm' },
+    {
+      key: 'volumenManuell', label: 'Volumen (optional)', typ: 'zahl', einheit: 'm³',
+      hinweis: 'Leer lassen: Fläche × lichte Höhe.',
+    },
+    {
+      key: 'luftwechsel', label: 'Luftwechsel (optional)', typ: 'bereich', optional: true, einheit: '1/h',
+      hinweis: 'Leer lassen: Standard aus den Einstellungen. Ein Raumwert überschreibt den Standard.',
+    },
+    ...(lieferantenKandidaten.length > 0
+      ? [
+        {
+          key: '_lieferanten', label: 'Wärmelieferanten', typ: 'abschnitt', sichtbarWenn: sichtbarBeiPassiv,
+          hinweis: 'Welche beheizten Räume liefern die Wärme für diesen Raum? Anteile in Prozent, die Summe muss 100 ergeben.',
+        },
+        ...lieferantenKandidaten.map((r) => ({
+          key: `lieferant.${r.id}`, label: `Anteil „${r.name}“`, typ: 'zahl', einheit: '%', sichtbarWenn: sichtbarBeiPassiv,
+        })),
+      ]
+      : []),
+    { key: 'notiz', label: 'Notiz', typ: 'notiz', hinweis: 'Per Diktat über die iOS-Tastatur möglich.' },
+  ];
+}
+
+export function neueFlaeche(raumId) {
+  return {
+    raumId, name: '', bauteilId: '', angrenzend: { art: 'aussen' }, modus: 'laengeHoehe',
+    laenge: null, hoehe: null, flaeche: null, oeffnungen: [], notiz: '',
+  };
+}
+
+const bereichKurz = (b) => (b.min === b.max ? zahlZuText(b.min) : `${zahlZuText(b.min)}–${zahlZuText(b.max)}`);
+
+export function flaechenFelder({ bauteile, zonen, raeume }) {
+  const sortiert = (liste) => [...liste].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  return [
+    { key: 'name', label: 'Bezeichnung (optional)', typ: 'text', hinweis: 'Zum Beispiel „Nordwand“.' },
+    {
+      key: 'bauteilId', label: 'Bauteil', typ: 'auswahl',
+      optionen: [
+        { wert: '', label: '– bitte wählen –' },
+        ...sortiert(bauteile).map((b) => ({ wert: b.id, label: `${b.name} (U ${bereichKurz(b.u)})` })),
+      ],
+    },
+    {
+      key: 'angrenzendWahl', label: 'Grenzt an', typ: 'auswahl',
+      optionen: [
+        { wert: 'aussen', label: 'Außenluft' },
+        ...sortiert(zonen).map((z) => ({ wert: `zone:${z.id}`, label: `Zone: ${z.name}` })),
+        ...sortiert(raeume).map((r) => ({ wert: `raum:${r.id}`, label: `Raum: ${r.name}` })),
+      ],
+    },
+    {
+      key: 'spiegeln', label: 'Gegenseite im anderen Raum ebenfalls anlegen', typ: 'schalter',
+      sichtbarWenn: { feld: 'angrenzendWahl', praefix: 'raum:' },
+      hinweis: 'Eine Wand zwischen zwei Räumen zählt im wärmeren Raum. Der Eintrag im anderen Raum ist eine Kopie und ändert sich nicht mit.',
+    },
+    { key: 'modus', label: 'Maße', typ: 'auswahl', optionen: MASSARTEN_FLAECHE },
+    { key: 'laenge', label: 'Länge', typ: 'zahl', einheit: 'm', sichtbarWenn: { feld: 'modus', wert: 'laengeHoehe' } },
+    { key: 'hoehe', label: 'Höhe', typ: 'zahl', einheit: 'm', sichtbarWenn: { feld: 'modus', wert: 'laengeHoehe' } },
+    { key: 'flaeche', label: 'Fläche', typ: 'zahl', einheit: 'm²', sichtbarWenn: { feld: 'modus', wert: 'flaeche' } },
+    { key: 'notiz', label: 'Notiz', typ: 'notiz' },
+  ];
+}
+
+export function neueOeffnung() {
+  return { typId: '', name: '', modus: 'laengeHoehe', laenge: null, hoehe: null, flaeche: null, anzahl: 1 };
+}
+
+export function oeffnungsEintragFelder({ oeffnungstypen }) {
+  const typen = [...oeffnungstypen].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  return [
+    {
+      key: 'typId', label: 'Öffnungstyp', typ: 'auswahl',
+      optionen: [
+        { wert: '', label: '– bitte wählen –' },
+        ...typen.map((t) => ({ wert: t.id, label: `${t.name} (Uw ${zahlZuText(t.uw)})` })),
+      ],
+    },
+    { key: 'name', label: 'Bezeichnung (optional)', typ: 'text', hinweis: 'Zum Beispiel „Fenster Nord“.' },
+    { key: 'modus', label: 'Maße', typ: 'auswahl', optionen: MASSARTEN_OEFFNUNG },
+    { key: 'laenge', label: 'Breite', typ: 'zahl', einheit: 'm', sichtbarWenn: { feld: 'modus', wert: 'laengeHoehe' } },
+    { key: 'hoehe', label: 'Höhe', typ: 'zahl', einheit: 'm', sichtbarWenn: { feld: 'modus', wert: 'laengeHoehe' } },
+    { key: 'flaeche', label: 'Fläche je Stück', typ: 'zahl', einheit: 'm²', sichtbarWenn: { feld: 'modus', wert: 'flaeche' } },
+    { key: 'anzahl', label: 'Anzahl', typ: 'zahl' },
+  ];
+}

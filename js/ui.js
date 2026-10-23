@@ -19,6 +19,12 @@ export function el(tag, eigenschaften = {}, ...kinder) {
   return knoten;
 }
 
+// Ersetzt den Inhalt eines Elements. Leere Platzhalter (null, undefined, false) werden übersprungen,
+// replaceChildren würde sie sonst als Text "null" anzeigen.
+export function ersetzeKinder(knoten, ...kinder) {
+  knoten.replaceChildren(...kinder.flat().filter((k) => k !== null && k !== undefined && k !== false));
+}
+
 // Wert unter einem Pfad wie "aufheizzuschlag.wProM2" lesen und setzen.
 export function holeWert(objekt, pfad) {
   return pfad.split('.').reduce((o, teil) => o?.[teil], objekt);
@@ -71,7 +77,12 @@ function baueFeld(feld, wert, beiAenderung) {
         el('label', {}, el('span', { class: 'klein' }, 'Minimum'), mitEinheit(min, feld.einheit)),
         el('label', {}, el('span', { class: 'klein' }, 'Maximum'), mitEinheit(max, feld.einheit)),
       );
-      return { eingabe, lies: () => ({ min: parseDezimal(min.value), max: parseDezimal(max.value) }) };
+      const lies = () => {
+        const bereich = { min: parseDezimal(min.value), max: parseDezimal(max.value) };
+        // Optionales Feld: sind beide leer, bedeutet das "nicht gesetzt" (Standard gilt).
+        return feld.optional && bereich.min === null && bereich.max === null ? null : bereich;
+      };
+      return { eingabe, lies };
     }
     case 'auswahl': {
       const eingabe = el(
@@ -86,6 +97,8 @@ function baueFeld(feld, wert, beiAenderung) {
       eingabe.checked = Boolean(wert);
       return { eingabe, lies: () => eingabe.checked, inline: true };
     }
+    case 'abschnitt':
+      return { eingabe: null, lies: () => undefined, abschnitt: true };
     default:
       throw new Error(`Unbekannter Feldtyp: ${feld.typ}`);
   }
@@ -93,33 +106,65 @@ function baueFeld(feld, wert, beiAenderung) {
 
 // Erzeugt ein Formular. Rückgabe: { element, lies(), zeigeMeldungen(meldungen) }.
 // beiAenderung wird bei jeder Eingabe aufgerufen.
+//
+// Ein Feld kann bedingt sichtbar sein:
+//   sichtbarWenn: { feld: 'status', wert: 'passiv' }        Wert gleich
+//   sichtbarWenn: { feld: 'angrenzendWahl', praefix: 'raum:' } Wert beginnt mit
+// Ausgeblendete Felder behalten ihren Wert, die Prüfregeln entscheiden, ob er zählt.
 export function baueFormular(felder, werte, beiAenderung = () => {}) {
   const wurzel = el('div', { class: 'formular' });
   const allgemein = el('div', { class: 'meldungen allgemein', 'aria-live': 'polite' });
   const eintraege = [];
 
+  const geaendert = () => {
+    aktualisiereSichtbarkeit();
+    beiAenderung();
+  };
+
+  function leseAlle() {
+    const ergebnis = {};
+    for (const { feld, lies } of eintraege) {
+      if (feld.typ !== 'abschnitt') setzeWert(ergebnis, feld.key, lies());
+    }
+    return ergebnis;
+  }
+
+  function aktualisiereSichtbarkeit() {
+    const aktuell = leseAlle();
+    for (const e of eintraege) {
+      const bedingung = e.feld.sichtbarWenn;
+      if (!bedingung) continue;
+      const wert = holeWert(aktuell, bedingung.feld);
+      e.zeile.hidden = bedingung.praefix !== undefined
+        ? !(typeof wert === 'string' && wert.startsWith(bedingung.praefix))
+        : wert !== bedingung.wert;
+    }
+  }
+
   wurzel.append(allgemein);
   for (const feld of felder) {
-    const { eingabe, lies, inline } = baueFeld(feld, holeWert(werte, feld.key), beiAenderung);
+    const { eingabe, lies, inline, abschnitt } = baueFeld(feld, holeWert(werte, feld.key), geaendert);
     const meldungen = el('div', { class: 'meldungen', 'aria-live': 'polite' });
-    // Bereichsfelder enthalten eigene Labels, die übrigen werden vom Label umschlossen.
-    const zeile = feld.typ === 'bereich'
-      ? el('div', { class: 'feld' }, el('span', { class: 'beschriftung' }, feld.label), eingabe, hinweis(feld), meldungen)
-      : el(
+    let zeile;
+    if (abschnitt) {
+      zeile = el('div', { class: 'abschnitt' }, el('h3', {}, feld.label), hinweis(feld), meldungen);
+    } else if (feld.typ === 'bereich') {
+      // Bereichsfelder enthalten eigene Labels, die übrigen werden vom Label umschlossen.
+      zeile = el('div', { class: 'feld' }, el('span', { class: 'beschriftung' }, feld.label), eingabe, hinweis(feld), meldungen);
+    } else {
+      zeile = el(
         'label', { class: inline ? 'feld inline' : 'feld' },
         el('span', { class: 'beschriftung' }, feld.label), eingabe, hinweis(feld), meldungen,
       );
+    }
     wurzel.append(zeile);
     eintraege.push({ feld, lies, zeile, meldungen });
   }
+  aktualisiereSichtbarkeit();
 
   return {
     element: wurzel,
-    lies() {
-      const ergebnis = {};
-      for (const { feld, lies } of eintraege) setzeWert(ergebnis, feld.key, lies());
-      return ergebnis;
-    },
+    lies: leseAlle,
     zeigeMeldungen(liste) {
       allgemein.replaceChildren();
       for (const e of eintraege) {
