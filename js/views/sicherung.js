@@ -159,7 +159,7 @@ export async function renderSicherung(container) {
   }
 
   const dateiwahl = el('input', {
-    type: 'file', accept: '.json,application/json', class: 'versteckt', 'aria-label': 'Sicherungsdatei wählen',
+    type: 'file', class: 'versteckt', 'aria-label': 'Sicherungsdatei wählen',
     onChange: async () => {
       const gewaehlt = dateiwahl.files[0];
       if (!gewaehlt) return;
