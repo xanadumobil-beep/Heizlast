@@ -131,7 +131,7 @@ function pruefeVerweise(d) {
 }
 
 // Prüfregeln der App auf die Inhalte anwenden. Das sind Hinweise, kein Grund, den Import zu verweigern.
-function inhaltsHinweise(d) {
+export function inhaltsHinweise(d) {
   const meldungen = [];
   const sammle = (bereich, name, liste) => {
     for (const m of liste) meldungen.push({ bereich, name, stufe: m.stufe, text: m.text });
@@ -249,4 +249,19 @@ export function bannerText(status) {
     return `Noch nie gesichert, die App wird seit ${status.tage} Tagen genutzt. Bitte jetzt eine Sicherungsdatei exportieren.`;
   }
   return `Die letzte Sicherung ist ${status.tage} Tage alt (vom ${datumText(status.referenz)}). Bitte jetzt eine neue Sicherungsdatei exportieren.`;
+}
+
+// Projektstand in der Form, die Rechenkern, Bericht und Anzeige nutzen, aus dem internen Speicher (Datenbank, Import).
+export function projektAusSpeicher(speicher) {
+  const nachName = (a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'de');
+  return {
+    einstellungen: speicher.settings[0],
+    zonen: [...speicher.zones].sort(nachName),
+    bauteile: [...speicher.components].sort(nachName),
+    oeffnungstypen: [...speicher.openingTypes].sort(nachName),
+    raeume: [...speicher.rooms].sort(nachName),
+    flaechen: speicher.surfaces,
+    heizkoerper: speicher.radiators,
+    verbrauch: [...speicher.consumption].sort(nachName),
+  };
 }

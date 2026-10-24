@@ -1,0 +1,59 @@
+/* Druck: Bericht auf A4, schwarz auf weiß. Auf dem iPad: Drucken, dann als PDF sichern. */
+
+@page { size: A4; margin: 14mm 12mm 16mm; }
+
+html, body {
+  background: #fff !important;
+  color: #000 !important;
+  font-size: 10pt;
+  line-height: 1.35;
+}
+
+/* Nur der Bericht wird gedruckt. */
+.kopfleiste, .banner, .keinDruck, nav, dialog, button { display: none !important; }
+main { max-width: none; margin: 0; padding: 0; }
+
+.bericht {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+}
+
+.bericht h1 { font-size: 17pt; margin: 0 0 2pt; }
+.b-projekt, .b-haftung { color: #000; font-size: 9.5pt; }
+.bericht h2 {
+  margin: 14pt 0 5pt;
+  padding-bottom: 2pt;
+  font-size: 12pt;
+  border-bottom: 1pt solid #000;
+  break-after: avoid;
+}
+.b-zwischentitel { margin: 9pt 0 3pt; font-size: 10.5pt; break-after: avoid; }
+.b-paare dt { color: #000; }
+.b-paare { grid-template-columns: 62mm 1fr; }
+
+.neue-seite { break-before: page; }
+.b-abschnitt { break-inside: auto; }
+
+/* Tabellen: Kopfzeile auf jeder Seite wiederholen, Zeilen nicht zerreißen. */
+.b-tabelle { overflow: visible; }
+.b-tabelle table { width: 100%; font-size: 8.5pt; }
+.b-tabelle table.breit { min-width: 0; font-size: 7.5pt; }
+.b-tabelle th, .b-tabelle td { padding: 1.5pt 3pt; border: 0.5pt solid #444; }
+.b-tabelle thead { display: table-header-group; }
+.b-tabelle thead th {
+  background: #e6e6e6 !important;
+  color: #000;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+tr, li, dt, dd, .b-box, .b-text { break-inside: avoid; }
+
+.b-box { color: #000; background: #fff; border: 1pt solid #000; border-left-width: 4pt; }
+.b-box.fehler { color: #000; background: #fff; }
+
+a { color: inherit; text-decoration: none; }

@@ -3,9 +3,10 @@
 import * as db from '../db.js';
 import { el, ersetzeKinder } from '../ui.js';
 import { oeffneDialog } from '../dialog.js';
-import { heizkoerperAbschnitt, leistungFehlt } from './heizkoerper.js';
+import { leistungFehlt, watt, wattBereich, FALL_NAME, raumName, flaechenBezeichnung, angrenzendText, massText, grundText, meldungsTexte } from '../anzeige.js';
+import { heizkoerperAbschnitt } from './heizkoerper.js';
 import { ladeProjekt, rechne } from '../daten.js';
-import { formatZahl, formatBereich, zahlZuText } from '../engine/format.js';
+import { formatZahl, zahlZuText } from '../engine/format.js';
 import { GEGENPROBE_TOLERANZ_W } from '../engine/heatload.js';
 import {
   flaecheAusMassen, oeffnungsGesamtflaeche, nettoFlaeche, raumVolumen, wahlZuAngrenzend, angrenzendZuWahl,
@@ -14,105 +15,6 @@ import { validiereRaumEingabe, validiereFlaeche, validiereOeffnungEintrag } from
 import {
   STATI, GESCHOSSE, werte, label, neuerRaum, raumFelder, neueFlaeche, flaechenFelder, neueOeffnung, oeffnungsEintragFelder,
 } from '../schemas.js';
-
-// --- Anzeige-Hilfen ------------------------------------------------------------------
-
-const watt = (x) => `${formatZahl(x, 0)} W`;
-const wattBereich = (a, b) => `${formatBereich(a, b, 0)} W`;
-const FALL_NAME = { guenstig: 'günstig', ungunstig: 'ungünstig' };
-
-const raumName = (projekt, id) => projekt.raeume.find((r) => r.id === id)?.name ?? 'nicht mehr vorhandener Raum';
-
-function flaechenBezeichnung(projekt, flaeche) {
-  const bauteil = projekt.bauteile.find((b) => b.id === flaeche.bauteilId);
-  return flaeche.name || bauteil?.name || 'Fläche';
-}
-
-function angrenzendText(projekt, angrenzend) {
-  if (!angrenzend || angrenzend.art === 'aussen') return 'Außenluft';
-  if (angrenzend.art === 'zone') {
-    const zone = projekt.zonen.find((z) => z.id === angrenzend.zoneId);
-    if (!zone) return 'Zone nicht mehr vorhanden';
-    const t = zone.temperatur;
-    return `Zone „${zone.name}“ (${t.min === t.max ? zahlZuText(t.min) : `${zahlZuText(t.min)} bis ${zahlZuText(t.max)}`} °C)`;
-  }
-  const raum = projekt.raeume.find((r) => r.id === angrenzend.raumId);
-  if (!raum) return 'Raum nicht mehr vorhanden';
-  return `Raum „${raum.name}“${typeof raum.theta === 'number' ? ` (${zahlZuText(raum.theta)} °C)` : ''}`;
-}
-
-function massText(m) {
-  const flaeche = flaecheAusMassen(m);
-  if (m.modus === 'flaeche') return `${formatZahl(flaeche, 2)} m²`;
-  return `${formatZahl(m.laenge, 2)} m × ${formatZahl(m.hoehe, 2)} m = ${formatZahl(flaeche, 2)} m²`;
-}
-
-// Erklärt, warum ein Raum-zu-Raum-Verlust nicht angerechnet wird.
-function grundText(projekt, eintrag) {
-  const nachbar = raumName(projekt, eintrag.nachbarId);
-  switch (eintrag.grund) {
-    case 'nachbar_waermer': return `„${nachbar}“ ist wärmer: keine Gutschrift`;
-    case 'gleiche_temperatur': return `„${nachbar}“ hat dieselbe Temperatur: kein Wärmestrom`;
-    case 'nachbar_passiv': return `„${nachbar}“ ist passiv mitbeheizt: über die Zurechnung seines Verlusts berücksichtigt`;
-    case 'nachbar_unbeheizt': return `„${nachbar}“ ist ein unbeheizter Raum: bitte stattdessen eine Zone verwenden`;
-    default: return 'grenzt an einen nicht mehr vorhandenen Raum';
-  }
-}
-
-// Meldungen aus Rechenkern und Modell in Klartext.
-function meldungsTexte(projekt, ergebnis, hinweise) {
-  const texte = [];
-  for (const w of ergebnis?.warnungen ?? []) {
-    if (w.art === 'gegenprobe') {
-      const betrag = formatZahl(Math.abs(w.differenz), 1);
-      texte.push({
-        stufe: 'fehler', art: w.art, raumId: null,
-        text: `Gegenprobe (${FALL_NAME[w.fall]}): Die Raumheizlasten weichen um ${betrag} W von der Gebäudesumme ab, `
-          + `${w.differenz > 0 ? `es fehlen ${betrag} W in den Raumheizlasten` : `${betrag} W sind doppelt gezählt`}. `
-          + 'Meist stimmt die Verteilung eines passiven Raums nicht auf 100 %.',
-      });
-    } else if (w.art === 'passiv_verteilung') {
-      texte.push({
-        stufe: 'warnung', art: w.art, raumId: w.raumId,
-        text: `Passiver Raum „${raumName(projekt, w.raumId)}“: Die Wärmelieferanten ergeben ${formatZahl(w.summe, 1)} % statt 100 %.`,
-      });
-    } else if (w.art === 'lieferant_kein_beheizter_raum') {
-      texte.push({
-        stufe: 'warnung', art: w.art, raumId: w.raumId,
-        text: `Passiver Raum „${raumName(projekt, w.raumId)}“: „${raumName(projekt, w.lieferantId)}“ ist kein beheizter Raum und liefert keine Wärme.`,
-      });
-    } else if (w.art === 'passiv_ohne_anteil') {
-      texte.push({
-        stufe: 'warnung', art: w.art, raumId: w.raumId, proRaum: true,
-        text: `Grenzt an passiven Raum „${raumName(projekt, w.passivId)}“ ohne Wärmeanteil, Raumheizlast möglicherweise zu niedrig.`,
-      });
-    } else if (w.art === 'gegenraum_unbrauchbar') {
-      texte.push({
-        stufe: 'warnung', art: w.art, raumId: w.raumId,
-        text: `Raum „${raumName(projekt, w.raumId)}“: Eine Fläche grenzt an ${w.grund === 'nachbar_unbeheizt'
-          ? 'einen unbeheizten Raum (bitte stattdessen eine Zone verwenden)' : 'einen nicht mehr vorhandenen Raum'}.`,
-      });
-    }
-  }
-  for (const h of hinweise) {
-    const raum = `„${raumName(projekt, h.raumId)}“`;
-    const flaeche = h.flaecheId ? projekt.flaechen.find((f) => f.id === h.flaecheId) : null;
-    const wo = flaeche ? `${raum}, ${flaechenBezeichnung(projekt, flaeche)}` : raum;
-    const nachricht = {
-      bauteil_fehlt: `${wo}: Das Bauteil fehlt im Katalog. Die Fläche wird nicht gerechnet.`,
-      zone_fehlt: `${wo}: Die Zone gibt es nicht mehr. Die Fläche wird nicht gerechnet.`,
-      masse_ungueltig: `${wo}: Die Maße sind unvollständig. Die Fläche wird nicht gerechnet.`,
-      oeffnung_unvollstaendig: `${wo}: Eine Öffnung ist unvollständig und wird ausgelassen.`,
-      oeffnungen_zu_gross: `${wo}: Die Öffnungen sind größer als die Fläche. Die Fläche wird nicht gerechnet.`,
-      raum_unvollstaendig: `${raum}: Fläche, Höhe oder Temperatur fehlt. Der Raum wird nicht gerechnet.`,
-      gegenseite_fehlt: `${raum} führt eine Wand zum wärmeren Raum „${raumName(projekt, h.nachbarId)}“, `
-        + `aber „${raumName(projekt, h.nachbarId)}“ führt keine Fläche zu „${raumName(projekt, h.raumId)}“. `
-        + 'Der Wärmeverlust des wärmeren Raums an diese Wand wird dadurch nicht angerechnet.',
-    }[h.art];
-    if (nachricht) texte.push({ stufe: 'warnung', art: h.art, raumId: h.raumId, text: nachricht });
-  }
-  return texte;
-}
 
 const meldungsBlock = (texte) => texte.map((t) => el('p', { class: `meldung ${t.stufe}` }, `⚠ ${t.text}`));
 

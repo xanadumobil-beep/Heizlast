@@ -1,14 +1,14 @@
 // Lädt den gesamten Projektstand aus der Datenbank und rechnet ihn durch.
 
 import * as db from './db.js';
-import { baueRechenEingabe, baueHeizkoerperEingabe } from './modell.js';
+import { baueRechenEingabe, baueHeizkoerperEingabe, migriereVerbrauch } from './modell.js';
 import { berechneGebaeude } from './engine/heatload.js';
 import { bewerteRaeume } from './engine/vorlauf.js';
 
 export async function ladeProjekt() {
-  const [einstellungen, zonen, bauteile, oeffnungstypen, raeume, flaechen, heizkoerper] = await Promise.all([
+  const [einstellungen, zonen, bauteile, oeffnungstypen, raeume, flaechen, heizkoerper, verbrauch] = await Promise.all([
     db.ladeEinstellungen(), db.alle('zones'), db.alle('components'), db.alle('openingTypes'),
-    db.alle('rooms'), db.alle('surfaces'), db.alle('radiators'),
+    db.alle('rooms'), db.alle('surfaces'), db.alle('radiators'), db.alle('consumption'),
   ]);
   const nachName = (a, b) => a.name.localeCompare(b.name, 'de');
   return {
@@ -19,6 +19,7 @@ export async function ladeProjekt() {
     raeume: raeume.sort(nachName),
     flaechen,
     heizkoerper,
+    verbrauch: verbrauch.map(migriereVerbrauch).sort(nachName),
   };
 }
 

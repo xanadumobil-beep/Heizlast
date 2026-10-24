@@ -9,6 +9,7 @@ import { renderRaeume, renderRaum } from './views/raeume.js';
 import { renderVorlauf } from './views/vorlauf.js';
 import { renderVerbrauch, renderVerbrauchListe } from './views/verbrauch.js';
 import { renderSicherung } from './views/sicherung.js';
+import { renderBericht } from './views/bericht.js';
 import { aktualisiereBanner } from './banner.js';
 
 // render(container, neuLaden, parameter): parameter ist der Teil nach dem Schrägstrich im Link.
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'raeume', titel: 'Räume', render: (c, neu, id) => (id ? renderRaum(c, id, neu) : renderRaeume(c, neu)) },
   { id: 'vorlauf', titel: 'Vorlauf', render: (c) => renderVorlauf(c) },
   { id: 'verbrauch', titel: 'Verbrauch', render: (c, neu, id) => (id ? renderVerbrauch(c, id, neu) : renderVerbrauchListe(c, neu)) },
+  { id: 'bericht', titel: 'Bericht', render: (c) => renderBericht(c) },
   { id: 'bauteile', titel: 'Bauteile', render: (c, neu) => renderKatalog(c, KATALOGE.bauteile, neu) },
   { id: 'oeffnungen', titel: 'Öffnungen', render: (c, neu) => renderKatalog(c, KATALOGE.oeffnungen, neu) },
   { id: 'zonen', titel: 'Zonen', render: (c, neu) => renderKatalog(c, KATALOGE.zonen, neu) },
@@ -27,7 +29,7 @@ const inhalt = document.getElementById('inhalt');
 const navigation = document.getElementById('navigation');
 let zeichnung = 0;
 
-// Links: #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bauteile, #oeffnungen, #zonen, #sicherung, #einstellungen
+// Links: #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bericht, #bauteile, #oeffnungen, #zonen, #sicherung, #einstellungen
 function aktuelleRoute() {
   const [erster, parameter] = location.hash.slice(1).split('/');
   const tabId = erster === 'raum' ? 'raeume' : erster;

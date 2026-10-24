@@ -4,61 +4,13 @@ import * as db from '../db.js';
 import { el, ersetzeKinder, baueFormular } from '../ui.js';
 import { ladeProjekt, rechne } from '../daten.js';
 import { formatZahl, formatBereich, zahlZuText, parseDezimal } from '../engine/format.js';
-import { berechneVerbrauch, vergleiche, annahmen, FREMDWAERME_HINWEIS } from '../engine/verbrauch.js';
+import { annahmen, FREMDWAERME_HINWEIS } from '../engine/verbrauch.js';
 import { mittlereInnentemperatur, migriereVerbrauch } from '../modell.js';
 import { hatFehler, hatWarnungen, validiereVerbrauch } from '../validate.js';
 import { verbrauchFelder, neuerVerbrauch, HEIZPERIODE_MONATE } from '../schemas.js';
-
-const watt = (x) => `${formatZahl(x, 0)} W`;
-const wattBereich = (b) => `${formatBereich(b.min, b.max, 0)} W`;
-const mitVorzeichen = (x, stellen = 1) => `${x > 0 ? '+' : ''}${formatZahl(x, stellen)} %`.replace('-', '−');
-
-const FEHLER_TEXT = {
-  angaben_fehlen: 'Es fehlen Angaben.',
-  holz_angaben_fehlen: 'Für das Holz fehlen Heizwert oder Wirkungsgrad.',
-  nicht_heizung_zu_gross: 'Der Anteil nicht für Heizung ist größer als der Gasverbrauch.',
-  monat_unvollstaendig: 'Ein gewählter Heizmonat ist unvollständig.',
-  keine_heizmonate: 'Es ist kein Heizmonat gewählt.',
-  gradtage_nicht_positiv: 'Die umgerechnete Gradtagzahl ist nicht positiv.',
-};
-
-// Berechnete Gebäudeheizlast als Bandbreite von der günstigen bis zur ungünstigen Rechnung.
-function berechneteBandbreite(ergebnis) {
-  if (!ergebnis || ergebnis.raeume.length === 0) return null;
-  const g = ergebnis.gebaeude.guenstig.summe;
-  const u = ergebnis.gebaeude.ungunstig.summe;
-  return { min: Math.min(g, u), max: Math.max(g, u) };
-}
-
-function engineEingabe(doc, projekt) {
-  return {
-    gasKwh: doc.gasKwh,
-    nichtFuerHeizungKwh: doc.nichtFuerHeizungKwh,
-    kesselNutzungsgrad: doc.kesselNutzungsgrad,
-    holzRm: doc.holzRm,
-    heizwertRm: doc.heizwertRm,
-    ofenWirkungsgrad: doc.ofenWirkungsgrad,
-    monate: doc.monate ?? [],
-    innentemperaturIst: doc.innentemperaturIst,
-    innentemperaturSoll: doc.innentemperaturSoll,
-    normAussentemperatur: projekt.einstellungen.thetaAussen,
-  };
-}
-
-// Ein Abgleich, ausgewertet: { meldungen, eingabe, ergebnis, vergleich } (ergebnis nur ohne Fehler).
-function auswerten(doc, projekt, berechnet) {
-  const meldungen = validiereVerbrauch(doc);
-  const eingabe = engineEingabe(doc, projekt);
-  if (hatFehler(meldungen)) return { meldungen, eingabe, ergebnis: null, vergleich: null };
-  const ergebnis = berechneVerbrauch(eingabe);
-  const vergleich = ergebnis.status === 'ok' ? vergleiche(berechnet, ergebnis.heizlast) : null;
-  return { meldungen, eingabe, ergebnis, vergleich };
-}
-
-function abweichungsText(vergleich) {
-  if (!vergleich || vergleich.abweichungProzent === null) return null;
-  return `Abweichung ${mitVorzeichen(vergleich.abweichungProzent)} (Mittelwert Verbrauch gegenüber Berechnung)`;
-}
+import {
+  watt, wattBereichVon as wattBereich, mitVorzeichen, FEHLER_TEXT, berechneteBandbreite, auswerten, abweichungsText,
+} from '../anzeige.js';
 
 // --- Ergebnis neben der berechneten Heizlast -----------------------------------------------
 

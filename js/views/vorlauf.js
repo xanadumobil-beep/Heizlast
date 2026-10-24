@@ -5,36 +5,12 @@ import { el, ersetzeKinder } from '../ui.js';
 import { ladeProjekt, rechne, bewerteVorlauf } from '../daten.js';
 import { formatZahl, zahlZuText } from '../engine/format.js';
 import { VORLAUF_MIN, VORLAUF_MAX } from '../engine/vorlauf.js';
+import { vorlaufText, hinweisText } from '../anzeige.js';
 
 const watt = (x) => `${formatZahl(x, 0)} W`;
 const mitVorzeichen = (x) => `${x > 0 ? '+' : ''}${formatZahl(x, 0)} W`.replace('-', '−');
 
-// Nötige Vorlauftemperatur als Text für die Tabelle.
-function vorlaufText(v) {
-  switch (v.status) {
-    case 'ok': return `${v.untergrenzeDatenblatt ? '≤ ' : ''}${formatZahl(v.vorlauf, 1)} °C`;
-    case 'nicht_deckbar': return `nicht deckbar (über ${VORLAUF_MAX} °C)`;
-    case 'leistung_fehlt': return 'Leistung fehlt';
-    case 'kein_heizkoerper': return 'kein Heizkörper';
-    default: return 'Datenblatt reicht nicht';
-  }
-}
-
 const vorlaufKlasse = (v) => (['leistung_fehlt', 'nicht_deckbar', 'kein_heizkoerper', 'unbestimmt'].includes(v.status) ? 'warnwert' : '');
-
-function hinweisText(h, ziel) {
-  switch (h.art) {
-    case 'kein_heizkoerper': return 'Kein Heizkörper mit Status „Bleibt“, „Neu“ oder „Geplant“ erfasst.';
-    case 'leistung_fehlt': return `Leistung fehlt bei ${h.heizkoerperIds.length} Heizkörper${h.heizkoerperIds.length === 1 ? '' : 'n'}: für diesen Raum wird keine Vorlauftemperatur berechnet.`;
-    case 'nicht_deckbar': return `Auch bei ${VORLAUF_MAX} °C nicht gedeckt, die Heizkörper leisten dort ${watt(h.leistungBeiMax)}.`;
-    case 'ausserhalb_datenblatt': return 'Die Datenblattwerte eines Wärmepumpen-Heizkörpers reichen nicht, um die Heizlast zu decken. Es wird nicht extrapoliert.';
-    case 'ausserhalb_datenblatt_ziel': return `Bei ${ziel} °C liegt ein Wärmepumpen-Heizkörper außerhalb seiner Datenblattwerte (${zahlZuText(h.einzelne[0].von)} bis ${zahlZuText(h.einzelne[0].bis)} °C): keine Leistung ausgewiesen.`;
-    case 'untergrenze_datenblatt': return `Die Datenblattwerte beginnen bei ${formatZahl(h.vorlauf, 1)} °C. Die nötige Vorlauftemperatur liegt höchstens dort.`;
-    case 'altes_ventil': return 'Altes Ventil: kein hydraulischer Abgleich möglich (nur Hinweis, die Leistung ändert sich nicht).';
-    case 'bezugstemperatur_abweichend': return `Das Datenblatt gilt für ${zahlZuText(h.bezug)} °C Raumtemperatur, der Raum hat ${zahlZuText(h.raumTemperatur)} °C. Die Werte sind unverändert übernommen.`;
-    default: return '';
-  }
-}
 
 function zelle(inhalt, klasse = '') {
   return el('td', { class: `zahl ${klasse}`.trim() }, inhalt);

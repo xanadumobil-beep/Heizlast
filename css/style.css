@@ -317,3 +317,42 @@ label.knopf { position: relative; cursor: pointer; }
 input.versteckt { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .hinweisliste ul { margin: 4px 0; padding-left: 20px; }
 .hinweisliste li { margin-bottom: 4px; font-size: 0.95rem; }
+
+/* Bericht: Vorschau auf dem Bildschirm (der Druck steht in print.css) */
+.bericht {
+  max-width: 900px;
+  margin: 16px auto 0;
+  padding: 24px 28px;
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: var(--radius);
+}
+.bericht h1 { margin: 0 0 4px; font-size: 1.5rem; }
+.bericht h2 { margin: 28px 0 8px; padding-bottom: 4px; font-size: 1.2rem; border-bottom: 2px solid var(--linie); }
+.b-projekt { margin: 0 0 6px; color: var(--text-leise); }
+.b-haftung { margin: 0; font-size: 0.9rem; color: var(--text-leise); }
+.b-zwischentitel { margin: 16px 0 6px; font-size: 1rem; }
+.b-text { margin: 6px 0; }
+.b-liste { margin: 6px 0; padding-left: 22px; }
+.b-liste li { margin-bottom: 5px; }
+.b-paare { display: grid; grid-template-columns: minmax(160px, 36%) 1fr; gap: 4px 16px; margin: 6px 0; }
+.b-paare dt { color: var(--text-leise); }
+.b-paare dd { margin: 0; }
+.b-tabelle { overflow-x: auto; margin: 6px 0; }
+.b-tabelle table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.b-tabelle th, .b-tabelle td { padding: 5px 7px; border: 1px solid var(--linie); text-align: left; vertical-align: top; font-weight: normal; }
+.b-tabelle thead th { background: var(--bg); font-weight: 600; }
+.b-tabelle tbody th { font-weight: 600; }
+.b-tabelle .r { text-align: right; }
+.b-tabelle tr.summe th, .b-tabelle tr.summe td { font-weight: 700; border-top: 2px solid var(--text-leise); }
+.b-tabelle table.breit { min-width: 780px; font-size: 0.8rem; }
+.b-box { margin: 10px 0; padding: 10px 12px; border-left: 5px solid var(--warnung); border-radius: 6px; color: var(--warnung); background: var(--warnung-bg); }
+.b-box.fehler { color: var(--fehler); background: var(--fehler-bg); border-left-color: var(--fehler); }
+details.hilfe summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+details.hilfe ol { margin: 8px 0 0; padding-left: 22px; }
+details.hilfe li { margin-bottom: 6px; }
+@media (max-width: 600px) {
+  .bericht { padding: 16px 14px; }
+  .b-paare { grid-template-columns: 1fr; gap: 0; }
+  .b-paare dd { margin-bottom: 8px; }
+}
