@@ -75,13 +75,13 @@ async function baueVersionBlock() {
           type: 'button',
           class: 'gefahr',
           onClick: async () => {
-            if (!confirm('Den App-Speicher leeren und die App neu laden? Deine Eingaben bleiben erhalten. Es ist Internet nötig.')) return;
+            if (!confirm('Nur die Programmdateien der App werden gelöscht und neu geladen. Deine Projektdaten (Räume, Flächen, Heizkörper, Verbrauch, Einstellungen, Plan-Positionen) werden NICHT angefasst. Es ist Internet nötig. Fortfahren?')) return;
             await leereAppSpeicher();
           },
         }, 'App-Speicher leeren und neu laden'),
       ),
       meldung,
-      el('p', { class: 'hinweis' }, 'Hängt die App an einer alten Version, hilft „App-Speicher leeren und neu laden“. Es löscht nur die zwischengespeicherten Programmdateien, nicht deine Daten.'),
+      el('p', { class: 'hinweis' }, 'Hängt die App an einer alten Version, hilft „App-Speicher leeren und neu laden“. Es löscht nur die zwischengespeicherten Programmdateien (den Offline-Speicher der App) und lädt sie neu. Die Datenbank mit deinen Projektdaten wird dabei nicht berührt.'),
     );
   };
   await fuelle();

@@ -353,11 +353,13 @@ test('Geometrie: mehrere Wände zwischen denselben Räumen liegen parallel verse
 
 // --- Übersichtlichkeit: Marken statt Linien zu den Randsymbolen -------------------------------------
 
-test('Geometrie: ohne Auswahl Wände und Linien zur unbeheizten Zone, übrige Außenbezüge als Marken im Kasten', async () => {
+test('Geometrie: ohne Auswahl nur Wände zwischen Räumen, alle Außen- und Zonenbezüge als Marken im Kasten', async () => {
   const plan = planVon(await projekt());
   const g = geometrie(plan);
-  gleich(g.linien.length, 3, 0, 'zwei Wandlinien (Bad↔Wohnzimmer, Flur↔Wohnzimmer) und die Kellerdecke des Flurs zur Zone');
-  wahr(g.linien.filter((l) => l.art === 'wand').length === 2 && g.linien.filter((l) => l.art === 'bezug').every((l) => l.zielId === 'zone:zone-keller'), 'Außenluft, Erdreich und Nachbar bleiben Marken');
+  gleich(g.linien.length, 2, 0, 'zwei Wandlinien (Bad↔Wohnzimmer, Flur↔Wohnzimmer)');
+  wahr(g.linien.every((l) => l.art === 'wand'), 'keine Linien zu Zonen oder Randsymbolen ohne Auswahl');
+  const bericht = geometrie(plan, { bezuege: 'zonen' });
+  wahr(bericht.linien.length === 3 && bericht.linien.filter((l) => l.art === 'bezug').every((l) => l.zielId === 'zone:zone-keller'), 'Modus für den Bericht: zusätzlich die Linien zu Zonenkästen');
   const wohnen = g.kaesten.find((k) => k.id === 'raum-wohnen');
   wahr(wohnen.marken.map((m) => m.farbe).join(',') === 'aussen,nachbar,erdreich', `Reihenfolge der Marken: ${wohnen.marken.map((m) => m.farbe)}`);
   const flaeche = (farbe) => wohnen.marken.find((m) => m.farbe === farbe).flaeche;
@@ -381,7 +383,7 @@ test('Geometrie: Auswahl eines Raums zeigt nur dessen Linien zu den Randsymbolen
   const plan = planVon(await projekt());
   const bad = geometrie(plan, { auswahlRaum: 'raum-bad' });
   const aussen = bad.linien.filter((l) => l.art === 'bezug' && l.raumId === 'raum-bad');
-  wahr(aussen.length === 2 && bad.linien.filter((l) => l.art === 'bezug').length === 3, 'Bad: Außenluft und Erdreich, dazu die immer sichtbare Linie des Flurs zur Zone');
+  wahr(aussen.length === 2 && bad.linien.filter((l) => l.art === 'bezug').length === 2, 'Bad: Außenluft und Erdreich');
   wahr(bad.kaesten.find((k) => k.id === 'raum-bad').gewaehlt && !bad.kaesten.find((k) => k.id === 'raum-flur').gewaehlt, 'nur das Bad ist gewählt');
   const symbol = geometrie(plan, { auswahlSymbol: 'aussen' });
   const raeume = symbol.linien.filter((l) => l.art === 'bezug' && l.zielId === 'aussen').map((l) => l.raumId).sort();
@@ -456,10 +458,27 @@ test('Zonen: Geschoss der Zone: eigene Angabe, sonst Keller, sonst unterstes Ges
   wahr(planVon(p).geschosse.map((g) => g.name).join() === 'OG,EG,Keller', 'neues Geschoss OG oben');
 });
 
+test('Zonen: Auswahl des Zonenkastens zeigt die Linien aller angrenzenden Räume, „alle Linien“ zeigt sie ohne Auswahl', async () => {
+  const p = await projekt();
+  p.flaechen.push({ id: 'fl-bad-keller', raumId: 'raum-bad', bauteilId: 'bt-kellerdecke', angrenzend: { art: 'zone', zoneId: 'zone-keller' }, modus: 'flaeche', flaeche: 3, oeffnungen: [] });
+  const plan = planVon(p);
+  const gewaehlt = geometrie(plan, { auswahlRaum: 'zone:zone-keller' });
+  const zuZone = gewaehlt.linien.filter((l) => l.zielId === 'zone:zone-keller').map((l) => l.raumId).sort().join();
+  wahr(zuZone === 'raum-bad,raum-flur', `Linien zur Zone: ${zuZone}`);
+  wahr(gewaehlt.linien.filter((l) => l.art === 'bezug').every((l) => l.zielId === 'zone:zone-keller'), 'nur Linien der Auswahl');
+  wahr(gewaehlt.kaesten.find((k) => k.id === 'zone:zone-keller').gewaehlt, 'Zonenkasten als gewählt markiert');
+  const ohne = geometrie(plan);
+  wahr(ohne.linien.every((l) => l.art === 'wand'), 'ohne Auswahl keine Linien zur Zone');
+  wahr(ohne.kaesten.find((k) => k.id === 'raum-bad').marken.some((m) => m.farbe === 'unbeheizt'), 'die Marke „unbeheizt“ im Raumkasten bleibt sichtbar');
+  wahr(geometrie(plan, { bezuege: 'alle' }).linien.filter((l) => l.zielId === 'zone:zone-keller').length === 2, '„Alle Linien“ zeigt beide Linien zur Zone');
+  const raum = geometrie(plan, { auswahlRaum: 'raum-bad' });
+  wahr(raum.linien.some((l) => l.zielId === 'zone:zone-keller' && l.raumId === 'raum-bad') && !raum.linien.some((l) => l.raumId === 'raum-flur' && l.zielId === 'zone:zone-keller'), 'Auswahl eines Raums zeigt nur dessen Linie zur Zone');
+});
+
 test('Zonen: Position der Zone wird übernommen und die Linien enden am Rand des Zonenkastens', async () => {
   const p = await projekt();
   p.zonen.find((z) => z.id === 'zone-keller').plan = { x: 70, y: 60 };
-  const g = geometrie(planVon(p));
+  const g = geometrie(planVon(p), { auswahlRaum: 'zone:zone-keller' });
   const zone = g.kaesten.find((k) => k.id === 'zone:zone-keller');
   wahr(zone.gespeichert && zone.prozent.x === 70 && zone.prozent.y === 60, 'gespeicherte Position');
   const linie = g.linien.find((l) => l.zielId === 'zone:zone-keller');

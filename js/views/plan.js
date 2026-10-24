@@ -49,7 +49,7 @@ export async function renderPlan(container) {
   const { ergebnis } = rechne(projekt);
   let anordnen = false;
   let auswahl = { raum: null, symbol: null, linie: null }; // linie: Id der Wand oder gebündelten Linie
-  let bezuege = 'marken';
+  let bezuege = 'auswahl';
   let plan = null;
   let geom = null;
 
@@ -195,11 +195,11 @@ export async function renderPlan(container) {
     zeichne();
   });
 
-  const bezugKnopf = el('button', { type: 'button', 'aria-pressed': 'false', class: 'klein' }, 'Alle Außenlinien zeigen');
+  const bezugKnopf = el('button', { type: 'button', 'aria-pressed': 'false' }, 'Linien: nur Auswahl');
   bezugKnopf.addEventListener('click', () => {
-    bezuege = bezuege === 'alle' ? 'marken' : 'alle';
+    bezuege = bezuege === 'alle' ? 'auswahl' : 'alle';
     bezugKnopf.setAttribute('aria-pressed', String(bezuege === 'alle'));
-    bezugKnopf.textContent = bezuege === 'alle' ? 'Außenlinien ausblenden' : 'Alle Außenlinien zeigen';
+    bezugKnopf.textContent = bezuege === 'alle' ? 'Linien: alle' : 'Linien: nur Auswahl';
     zeichne();
   });
 
@@ -226,9 +226,10 @@ export async function renderPlan(container) {
     el(
       'p', { class: 'beschreibung' },
       'Schema der Räume, aus den Eingaben erzeugt. Zwischen den Räumen laufen die Wände (Pfeil: Richtung des angerechneten Verlusts). '
-      + 'Die Marken im Kasten zeigen die Fläche an Außenluft, Nachbar, Zone und Erdreich. Tippe auf einen Kasten: Dann erscheinen seine Linien zu '
-      + 'den Randsymbolen und darunter alle Flächen mit Verlust, dort auch der Knopf zum Raumdetail. Ein Tipp auf ein Randsymbol zeigt, '
-      + 'welche Räume daran grenzen. Zum Umordnen „Kästen verschieben“ einschalten und die Kästen ziehen.',
+      + 'Die Marken im Kasten zeigen immer die Fläche an Außenluft, Nachbar, Zone und Erdreich. Die Linien zu Zonen und Randsymbolen '
+      + 'erscheinen für den angetippten Raum oder Zonenkasten („Linien: nur Auswahl“) oder alle zugleich („Linien: alle“). '
+      + 'Unter dem Plan stehen dann alle Flächen des gewählten Raums mit Verlust und der Knopf zum Raumdetail. '
+      + 'Zum Umordnen „Kästen verschieben“ einschalten und die Kästen ziehen.',
     ),
     el('div', { class: 'plan-bedienung' }, anordnenKnopf, bezugKnopf, zuruecksetzen),
     host,

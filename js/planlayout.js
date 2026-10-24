@@ -127,13 +127,14 @@ export function linienBreite(flaeche) {
 const MARKEN_REIHENFOLGE = ['aussen', 'nachbar', 'unbeheizt', 'erdreich'];
 
 // Koordinaten für den Plan. plan: Ergebnis von baueplan().
-// optionen: { auswahlRaum, auswahlSymbol, bezuege: 'marken' | 'alle' }
+// optionen: { auswahlRaum, auswahlSymbol, bezuege: 'auswahl' | 'zonen' | 'alle' }
 //   Wände zwischen Räumen und Linien passiver Räume stehen immer im Plan. Die Bezüge zu Außenluft und Zonen sind
 //   als Marken im Kasten zusammengefasst. Als Linie (je Raum und Gegenseite eine, Fläche summiert) erscheinen sie nur
-//   für den gewählten Raum, das gewählte Symbol oder bei bezuege 'alle'.
+//   für den gewählten Raum oder Zonenkasten oder das gewählte Symbol ('auswahl', Standard), zusätzlich alle Linien zu
+//   Zonenkästen ('zonen', für den Bericht) oder alle Linien ('alle').
 // Rückgabe: { breite, hoehe, boeden, kaesten, symbole, linien, passivLinien }
 export function geometrie(plan, optionen = {}) {
-  const { auswahlRaum = null, auswahlSymbol = null, bezuege = 'marken' } = optionen;
+  const { auswahlRaum = null, auswahlSymbol = null, bezuege = 'auswahl' } = optionen;
   const boeden = plan.geschosse.map((g, i) => ({ name: g.name, x: 0, y: RAND_OBEN + i * (FLAECHE_H + ABSTAND), b: FLAECHE_B, h: FLAECHE_H }));
   const hoehe = Math.max(RAND_OBEN + boeden.length * (FLAECHE_H + ABSTAND) - ABSTAND + 10, SYMBOL_H * plan.symbole.length + 20);
 
@@ -181,8 +182,8 @@ export function geometrie(plan, optionen = {}) {
       eintraege.push({ art: 'wand', id: l.id, raumId: l.raumId, zielId: l.zielId, farbe: l.farbe, flaeche: l.netto ?? l.flaeche, flaechenIds: [l.id], markiert: l.marker.length > 0, pfeil: l.pfeil });
       continue;
     }
-    // Linien zu unbeheizten Zonen (Kästen) gehören zum Plan wie die Wände, die übrigen nur bei Auswahl.
-    const sichtbar = bezuege === 'alle' || l.raumId === auswahlRaum || l.zielId === auswahlSymbol || l.zielId === auswahlRaum || kastenIds.has(l.zielId);
+    const sichtbar = bezuege === 'alle' || (bezuege === 'zonen' && kastenIds.has(l.zielId))
+      || l.raumId === auswahlRaum || l.zielId === auswahlSymbol || l.zielId === auswahlRaum;
     if (!sichtbar) continue;
     const schluessel = `${l.raumId}|${l.zielId}`;
     if (!buendel.has(schluessel)) {

@@ -30,7 +30,7 @@ function block(b) {
     case 'liste': return el('ul', { class: 'b-liste' }, b.eintraege.map((t) => el('li', {}, t)));
     case 'paare': return el('dl', { class: 'b-paare' }, b.zeilen.flatMap(([name, wert]) => [el('dt', {}, name), el('dd', {}, wert)]));
     case 'tabelle': return tabelle(b);
-    case 'plan': return el('div', { class: 'b-plan' }, zeichnePlan(geometrie(b.plan)), legende());
+    case 'plan': return el('div', { class: 'b-plan' }, zeichnePlan(geometrie(b.plan, { bezuege: 'zonen' })), legende());
     default: throw new Error(`Unbekannter Blocktyp: ${b.art}`);
   }
 }

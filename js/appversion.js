@@ -30,8 +30,12 @@ export async function sucheUpdate() {
   return registrierung.installing || registrierung.waiting ? 'neu' : 'aktuell';
 }
 
-// Löscht den App-Speicher (Dateien) und meldet den Service Worker ab, danach lädt die Seite neu und holt alles frisch.
-// Eingaben und Einstellungen liegen in IndexedDB und bleiben erhalten.
+// Löscht den App-Speicher und meldet den Service Worker ab, danach lädt die Seite neu und holt alles frisch.
+//
+// Das ist bewusst auf zwei Dinge beschränkt: (1) die Cache-Speicher mit dem Namen "heizlast-…" (die Programmdateien:
+// HTML, Skripte, Stile, Symbole) und (2) die Anmeldung des Service Workers. Diese Funktion berührt IndexedDB nicht:
+// Projektdaten, Einstellungen, Plan-Positionen und Sicherungsstatus liegen dort und bleiben unverändert.
+// Ein Test (tests/offline.test.js) stellt sicher, dass hier kein Zugriff auf indexedDB erfolgt.
 export async function leereAppSpeicher() {
   if (globalThis.caches) {
     for (const name of await caches.keys()) {

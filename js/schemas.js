@@ -111,7 +111,7 @@ export const ZONEN_FELDER = [
   {
     key: 'geschoss', label: 'Geschoss im Plan', typ: 'auswahl', sichtbarWenn: { feld: 'art', wert: 'unbeheizt' },
     optionen: [{ wert: '', label: 'Automatisch (Keller, sonst unterstes Geschoss)' }, ...GESCHOSSE],
-    hinweis: 'Unbeheizte Zonen stehen im Plan als verschiebbarer Kasten in diesem Geschoss.',
+    hinweis: 'Unbeheizte Zonen stehen im Plan als verschiebbarer Kasten in diesem Geschoss. Wähle das Geschoss, in dem die Zone räumlich liegt.',
   },
   { key: 'notiz', label: 'Notiz', typ: 'notiz' },
 ];
