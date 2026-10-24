@@ -8,6 +8,8 @@ import { renderKatalog, KATALOGE } from './views/katalog.js';
 import { renderRaeume, renderRaum } from './views/raeume.js';
 import { renderVorlauf } from './views/vorlauf.js';
 import { renderVerbrauch, renderVerbrauchListe } from './views/verbrauch.js';
+import { renderSicherung } from './views/sicherung.js';
+import { aktualisiereBanner } from './banner.js';
 
 // render(container, neuLaden, parameter): parameter ist der Teil nach dem Schrägstrich im Link.
 const TABS = [
@@ -17,6 +19,7 @@ const TABS = [
   { id: 'bauteile', titel: 'Bauteile', render: (c, neu) => renderKatalog(c, KATALOGE.bauteile, neu) },
   { id: 'oeffnungen', titel: 'Öffnungen', render: (c, neu) => renderKatalog(c, KATALOGE.oeffnungen, neu) },
   { id: 'zonen', titel: 'Zonen', render: (c, neu) => renderKatalog(c, KATALOGE.zonen, neu) },
+  { id: 'sicherung', titel: 'Sicherung', render: (c, neu) => renderSicherung(c, neu) },
   { id: 'einstellungen', titel: 'Einstellungen', render: (c) => renderEinstellungen(c) },
 ];
 
@@ -24,7 +27,7 @@ const inhalt = document.getElementById('inhalt');
 const navigation = document.getElementById('navigation');
 let zeichnung = 0;
 
-// Links: #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bauteile, #oeffnungen, #zonen, #einstellungen
+// Links: #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bauteile, #oeffnungen, #zonen, #sicherung, #einstellungen
 function aktuelleRoute() {
   const [erster, parameter] = location.hash.slice(1).split('/');
   const tabId = erster === 'raum' ? 'raeume' : erster;
@@ -36,6 +39,7 @@ async function zeigeTab() {
   for (const link of navigation.querySelectorAll('a')) {
     link.toggleAttribute('aria-current', link.dataset.tab === tab.id);
   }
+  aktualisiereBanner();
   const lauf = ++zeichnung;
   const neuerInhalt = el('div');
   await tab.render(neuerInhalt, zeigeTab, parameter);

@@ -1,0 +1,6 @@
+# Echte Sicherungsdateien enthalten Hausdaten und gehören nicht in das öffentliche Repository.
+heizlast-sicherung-*.json
+*.heizlast.json
+privat/
+.DS_Store
+node_modules/

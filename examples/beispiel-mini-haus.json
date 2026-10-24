@@ -1,0 +1,140 @@
+{
+  "format": "heizlast-projekt",
+  "schemaVersion": 1,
+  "exportiertAm": "2026-01-15T10:00:00.000Z",
+  "app": "Heizlast",
+  "daten": {
+    "einstellungen": {
+      "id": "projekt",
+      "projektname": "Beispielhaus (fiktiv)",
+      "thetaAussen": -8,
+      "luftwechselStandard": { "min": 0.5, "max": 1 },
+      "dUWB": { "min": 0.05, "max": 0.15 },
+      "fg": 1,
+      "aufheizzuschlag": { "aktiv": false, "wProM2": 0 },
+      "spreizung": 5,
+      "heizkoerperExponent": 1.3,
+      "zielVorlauf": 55
+    },
+    "zonen": [
+      { "id": "zone-erdreich", "name": "Erdreich", "art": "erdreich", "temperatur": { "min": 8, "max": 12 }, "notiz": "" },
+      { "id": "zone-keller", "name": "Keller (unbeheizt)", "art": "unbeheizt", "temperatur": { "min": 6, "max": 12 }, "notiz": "Fiktive Temperaturen" },
+      { "id": "zone-nachbar", "name": "Nachbargebäude", "art": "nachbar", "temperatur": { "min": 15, "max": 20 }, "notiz": "" }
+    ],
+    "bauteile": [
+      { "id": "bt-aussenwand", "name": "Außenwand Mauerwerk", "art": "aussenwand", "u": { "min": 1.2, "max": 1.6 }, "aufbau": "Fiktiv: Mauerwerk, innen verputzt", "quelle": "schaetzung" },
+      { "id": "bt-dach", "name": "Flachdach", "art": "dach", "u": { "min": 0.7, "max": 1.1 }, "aufbau": "Fiktiv: Betondecke mit Dämmung", "quelle": "schaetzung" },
+      { "id": "bt-boden", "name": "Bodenplatte", "art": "bodenplatte", "u": { "min": 0.9, "max": 1.3 }, "aufbau": "Fiktiv", "quelle": "schaetzung" },
+      { "id": "bt-kellerdecke", "name": "Kellerdecke", "art": "kellerdecke", "u": { "min": 0.8, "max": 1.2 }, "aufbau": "Fiktiv", "quelle": "stempel" },
+      { "id": "bt-nachbarwand", "name": "Nachbarwand", "art": "nachbarwand", "u": { "min": 0.9, "max": 1.3 }, "aufbau": "Fiktiv: Doppelwand zum Nachbarn", "quelle": "schaetzung" },
+      { "id": "bt-innenwand", "name": "Innenwand", "art": "innenwand", "u": { "min": 1.8, "max": 2.2 }, "aufbau": "Fiktiv", "quelle": "schaetzung" }
+    ],
+    "oeffnungstypen": [
+      { "id": "ot-fenster", "name": "Fenster 2-fach", "art": "fenster", "uw": 2.7, "quelle": "stempel" },
+      { "id": "ot-haustuer", "name": "Haustür", "art": "tuer", "uw": 1.8, "quelle": "schaetzung" }
+    ],
+    "raeume": [
+      {
+        "id": "raum-wohnen", "name": "Wohnzimmer", "geschoss": "EG", "status": "beheizt", "theta": 20,
+        "flaeche": 20, "hoehe": 2.5, "volumenManuell": null, "luftwechsel": null, "waermeLieferanten": [],
+        "notiz": "Fiktives Beispiel. Notizen lassen sich per Diktat eintragen."
+      },
+      {
+        "id": "raum-bad", "name": "Bad", "geschoss": "EG", "status": "beheizt", "theta": 22,
+        "flaeche": 6, "hoehe": 2.5, "volumenManuell": null, "luftwechsel": { "min": 0.6, "max": 1.0 }, "waermeLieferanten": [],
+        "notiz": "Eigener Luftwechsel überschreibt den Standard."
+      },
+      {
+        "id": "raum-flur", "name": "Flur", "geschoss": "EG", "status": "passiv", "theta": 15,
+        "flaeche": 8, "hoehe": 2.5, "volumenManuell": null, "luftwechsel": null,
+        "waermeLieferanten": [ { "raumId": "raum-wohnen", "prozent": 60 }, { "raumId": "raum-bad", "prozent": 40 } ],
+        "notiz": "Passiv mitbeheizt ohne eigenen Heizkörper. Die Wärme liefern Wohnzimmer (60 %) und Bad (40 %)."
+      }
+    ],
+    "raumflaechen": [
+      {
+        "id": "fl-wohnen-aussen", "raumId": "raum-wohnen", "name": "Südwand", "bauteilId": "bt-aussenwand",
+        "angrenzend": { "art": "aussen" }, "modus": "laengeHoehe", "laenge": 5, "hoehe": 2.5, "flaeche": null,
+        "oeffnungen": [
+          { "id": "oe-wohnen-fenster", "typId": "ot-fenster", "name": "Fenster Süd", "modus": "laengeHoehe", "laenge": 1.6, "hoehe": 1.4, "flaeche": null, "anzahl": 2 }
+        ],
+        "notiz": ""
+      },
+      { "id": "fl-wohnen-nachbar", "raumId": "raum-wohnen", "name": "Westwand", "bauteilId": "bt-nachbarwand", "angrenzend": { "art": "zone", "zoneId": "zone-nachbar" }, "modus": "laengeHoehe", "laenge": 4, "hoehe": 2.5, "flaeche": null, "oeffnungen": [], "notiz": "Reihenhaus: Wand zum Nachbarn" },
+      { "id": "fl-wohnen-dach", "raumId": "raum-wohnen", "name": "", "bauteilId": "bt-dach", "angrenzend": { "art": "aussen" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 20, "oeffnungen": [], "notiz": "" },
+      { "id": "fl-wohnen-boden", "raumId": "raum-wohnen", "name": "", "bauteilId": "bt-boden", "angrenzend": { "art": "zone", "zoneId": "zone-erdreich" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 20, "oeffnungen": [], "notiz": "" },
+      { "id": "fl-wohnen-bad", "raumId": "raum-wohnen", "name": "Wand zum Bad", "bauteilId": "bt-innenwand", "angrenzend": { "art": "raum", "raumId": "raum-bad" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 6, "oeffnungen": [], "notiz": "Gegenseite steht im Bad." },
+      { "id": "fl-wohnen-flur", "raumId": "raum-wohnen", "name": "Wand zum Flur", "bauteilId": "bt-innenwand", "angrenzend": { "art": "raum", "raumId": "raum-flur" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 5, "oeffnungen": [], "notiz": "" },
+
+      {
+        "id": "fl-bad-aussen", "raumId": "raum-bad", "name": "Außenwand", "bauteilId": "bt-aussenwand",
+        "angrenzend": { "art": "aussen" }, "modus": "laengeHoehe", "laenge": 2, "hoehe": 2.5, "flaeche": null,
+        "oeffnungen": [
+          { "id": "oe-bad-fenster", "typId": "ot-fenster", "name": "Badfenster", "modus": "laengeHoehe", "laenge": 0.6, "hoehe": 0.6, "flaeche": null, "anzahl": 1 }
+        ],
+        "notiz": ""
+      },
+      { "id": "fl-bad-dach", "raumId": "raum-bad", "name": "", "bauteilId": "bt-dach", "angrenzend": { "art": "aussen" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 6, "oeffnungen": [], "notiz": "" },
+      { "id": "fl-bad-boden", "raumId": "raum-bad", "name": "", "bauteilId": "bt-boden", "angrenzend": { "art": "zone", "zoneId": "zone-erdreich" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 6, "oeffnungen": [], "notiz": "" },
+      { "id": "fl-bad-wohnen", "raumId": "raum-bad", "name": "Wand zum Wohnzimmer", "bauteilId": "bt-innenwand", "angrenzend": { "art": "raum", "raumId": "raum-wohnen" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 6, "oeffnungen": [], "notiz": "Das Bad ist wärmer, deshalb zählt der Verlust hier." },
+
+      {
+        "id": "fl-flur-aussen", "raumId": "raum-flur", "name": "Eingangswand", "bauteilId": "bt-aussenwand",
+        "angrenzend": { "art": "aussen" }, "modus": "laengeHoehe", "laenge": 2, "hoehe": 2.5, "flaeche": null,
+        "oeffnungen": [
+          { "id": "oe-flur-haustuer", "typId": "ot-haustuer", "name": "Haustür", "modus": "laengeHoehe", "laenge": 1, "hoehe": 2.1, "flaeche": null, "anzahl": 1 }
+        ],
+        "notiz": ""
+      },
+      { "id": "fl-flur-dach", "raumId": "raum-flur", "name": "", "bauteilId": "bt-dach", "angrenzend": { "art": "aussen" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 8, "oeffnungen": [], "notiz": "" },
+      { "id": "fl-flur-boden", "raumId": "raum-flur", "name": "Boden über Keller", "bauteilId": "bt-kellerdecke", "angrenzend": { "art": "zone", "zoneId": "zone-keller" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 8, "oeffnungen": [], "notiz": "" },
+      { "id": "fl-flur-wohnen", "raumId": "raum-flur", "name": "Wand zum Wohnzimmer", "bauteilId": "bt-innenwand", "angrenzend": { "art": "raum", "raumId": "raum-wohnen" }, "modus": "flaeche", "laenge": null, "hoehe": null, "flaeche": 5, "oeffnungen": [], "notiz": "" }
+    ],
+    "heizkoerper": [
+      {
+        "id": "hk-wohnen-platte", "raumId": "raum-wohnen", "bauart": "platten", "typ": "22", "status": "bleibt", "material": "stahl", "ventil": "alt",
+        "bauhoehe": 600, "baulaenge": 1400, "bautiefe": 100, "nabenabstand": null, "gliederzahl": null, "leistungJeGlied": null,
+        "normleistung": 1450, "normVorlauf": 55, "normRuecklauf": 45, "normRaum": 20, "exponent": null,
+        "kennlinie": [], "kennlinieRaumtemperatur": 20, "notiz": "Fiktive Leistung bei 55/45/20."
+      },
+      {
+        "id": "hk-wohnen-glieder", "raumId": "raum-wohnen", "bauart": "glieder", "typ": "", "status": "entfaellt", "material": "guss", "ventil": "alt",
+        "bauhoehe": 600, "baulaenge": null, "bautiefe": null, "nabenabstand": 500, "gliederzahl": 12, "leistungJeGlied": 150,
+        "normleistung": null, "normVorlauf": 90, "normRuecklauf": 70, "normRaum": 20, "exponent": null,
+        "kennlinie": [], "kennlinieRaumtemperatur": 20, "notiz": "Alter Gliederheizkörper, Leistung je Glied nach Tabelle bei 90/70/20. Status entfällt."
+      },
+      {
+        "id": "hk-wohnen-wp", "raumId": "raum-wohnen", "bauart": "wp", "typ": "", "status": "geplant", "material": "",  "ventil": "neu",
+        "bauhoehe": null, "baulaenge": null, "bautiefe": null, "nabenabstand": null, "gliederzahl": null, "leistungJeGlied": null,
+        "normleistung": null, "normVorlauf": null, "normRuecklauf": null, "normRaum": null, "exponent": null,
+        "kennlinie": [ { "vorlauf": 35, "leistung": 600 }, { "vorlauf": 45, "leistung": 1000 }, { "vorlauf": 55, "leistung": 1400 } ],
+        "kennlinieRaumtemperatur": 20, "notiz": "Geplanter Wärmepumpen-Heizkörper mit Lüfter, Kennlinie aus dem (fiktiven) Datenblatt."
+      },
+      {
+        "id": "hk-bad-handtuch", "raumId": "raum-bad", "bauart": "handtuch", "typ": "", "status": "neu", "material": "stahl", "ventil": "neu",
+        "bauhoehe": 1800, "baulaenge": 600, "bautiefe": null, "nabenabstand": null, "gliederzahl": null, "leistungJeGlied": null,
+        "normleistung": 1000, "normVorlauf": 55, "normRuecklauf": 45, "normRaum": 20, "exponent": 1.25,
+        "kennlinie": [], "kennlinieRaumtemperatur": 20, "notiz": "Fiktive Leistung bei 55/45/20. Eigener Exponent n = 1,25."
+      }
+    ],
+    "verbrauch": [
+      {
+        "id": "vb-beispiel", "name": "Heizperiode 2024/25 (fiktiv)", "gasKwh": 5500, "nichtFuerHeizungKwh": 1000,
+        "kesselNutzungsgrad": { "min": 88, "max": 92 }, "holzRm": 2, "heizwertRm": { "min": 1700, "max": 1900 },
+        "ofenWirkungsgrad": { "min": 65, "max": 75 }, "innentemperaturIst": { "min": 18.5, "max": 20 }, "innentemperaturSoll": 20.6,
+        "monate": [
+          { "id": "mo-okt", "name": "Oktober", "gradtage": 250, "heiztage": 20, "heizmonat": true },
+          { "id": "mo-nov", "name": "November", "gradtage": 450, "heiztage": 30, "heizmonat": true },
+          { "id": "mo-dez", "name": "Dezember", "gradtage": 600, "heiztage": 31, "heizmonat": true },
+          { "id": "mo-jan", "name": "Januar", "gradtage": 650, "heiztage": 31, "heizmonat": true },
+          { "id": "mo-feb", "name": "Februar", "gradtage": 500, "heiztage": 28, "heizmonat": true },
+          { "id": "mo-mar", "name": "März", "gradtage": 400, "heiztage": 31, "heizmonat": false }
+        ],
+        "notiz": "Fiktive Zahlen. Der März ist nicht als Heizmonat gewählt und zählt nicht."
+      }
+    ],
+    "fotos": [],
+    "markierungen": [],
+    "szenarien": []
+  }
+}

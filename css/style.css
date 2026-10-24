@@ -181,7 +181,7 @@ dialog .knopfzeile { justify-content: flex-end; position: sticky; bottom: -20px;
 .abschnitt h3 { margin: 0 0 2px; }
 
 /* Räume und Ergebnisse */
-a.knopf {
+a.knopf, label.knopf {
   display: inline-flex;
   align-items: center;
   min-height: var(--ziel);
@@ -294,3 +294,26 @@ tr.hat-warnung td { background: var(--warnung-bg); }
     content: attr(data-label); display: block; font-size: 0.8rem; color: var(--text-leise);
   }
 }
+
+/* Sicherung */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 1068px;
+  margin: 12px 16px 0;
+  padding: 12px 16px;
+  color: var(--warnung);
+  background: var(--warnung-bg);
+  border-left: 5px solid var(--warnung);
+  border-radius: 8px;
+}
+.banner p { margin: 0; flex: 1 1 260px; }
+.banner[hidden] { display: none; }
+@media (min-width: 1132px) { .banner { margin-left: auto; margin-right: auto; } }
+
+label.knopf { position: relative; cursor: pointer; }
+input.versteckt { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.hinweisliste ul { margin: 4px 0; padding-left: 20px; }
+.hinweisliste li { margin-bottom: 4px; font-size: 0.95rem; }

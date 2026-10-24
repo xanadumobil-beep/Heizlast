@@ -4,6 +4,7 @@ import './validate.test.js';
 import './modell.test.js';
 import './vorlauf.test.js';
 import './verbrauch.test.js';
+import './io.test.js';
 import { alleTestsAusfuehren } from './runner.js';
 
 const ergebnisse = await alleTestsAusfuehren();
