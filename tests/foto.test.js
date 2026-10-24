@@ -146,13 +146,13 @@ test('Base64 und data-URL: Rundreise bytegenau, auch für Blöcke über 32 KB', 
   wahr((await blobZuBase64(new Blob([Uint8Array.from([72, 101, 105])]))) === 'SGVp', 'Base64 von „Hei“');
 });
 
-test('Sicherung ohne Fotos: keine Fotos, Markierungen und Baupläne in der Datei, Version 3', async () => {
+test('Sicherung ohne Fotos: keine Fotos, Markierungen und Baupläne in der Datei, Version 4', async () => {
   const speicher = await beispielSpeicher();
   speicher.photos = [foto('f1', 'raum-bad', 'Bad', '2026-01-01')];
   speicher.markers = [{ id: 'm1', fotoId: 'f1', raumId: 'raum-bad', x: 1, y: 2, ziel: null, beschriftung: 'x', auto: false }];
   speicher.backgrounds = [{ id: 'bg-EG', geschoss: 'EG', blob: kuenstlichesBild(50, 2), breite: 1000, hoehe: 700, drehung: 0, deckkraft: 0.5, sichtbar: true }];
   const datei = baueExport(speicher, jetzt);
-  wahr(datei.schemaVersion === 3 && SCHEMA_VERSION === 3, 'schemaVersion 3');
+  wahr(datei.schemaVersion === 4 && SCHEMA_VERSION === 4, 'schemaVersion 4');
   wahr(datei.daten.fotos.length === 0 && datei.daten.markierungen.length === 0 && datei.daten.hintergruende.length === 0, 'ohne Fotos');
   const text = await (await baueExportBlob(speicher, jetzt, { mitFotos: false })).text();
   wahr(JSON.parse(text).daten.fotos.length === 0 && !text.includes('base64'), 'Blob ohne Bilddaten');
@@ -168,7 +168,7 @@ test('Sicherung mit Fotos: Bilder, Vorschauen, Markierungen und Baupläne übers
   wahr(schritte.length === 3 && schritte[2][0] === 3 && schritte[2][1] === 3, `Fortschritt: ${JSON.stringify(schritte)}`);
   const text = await blob.text();
   const datei = JSON.parse(text);
-  wahr(datei.schemaVersion === 3 && datei.daten.fotos.length === 2 && datei.daten.hintergruende.length === 1 && datei.daten.markierungen.length === 1, 'Inhalt der Datei');
+  wahr(datei.schemaVersion === 4 && datei.daten.fotos.length === 2 && datei.daten.hintergruende.length === 1 && datei.daten.markierungen.length === 1, 'Inhalt der Datei');
   wahr(datei.daten.fotos[0].bild.startsWith('data:image/jpeg;base64,') && datei.daten.fotos[0].titel === 'Bad' && datei.daten.fotos[0].notiz === 'Notiz Bad', 'Foto mit Bild und Angaben');
   wahr(!('blob' in datei.daten.fotos[0]) && datei.daten.hintergruende[0].drehung === 90, 'keine Blobs, Drehung steht in der Datei');
   wahr(!text.includes('@@FOTOS@@') && !text.includes('@@HINTERGRUENDE@@'), 'Platzhalter ersetzt');
@@ -208,8 +208,8 @@ test('Import: Fotos ohne Bilddaten werden gemeldet und ausgelassen, ungültige B
   wahr(speicher.backgrounds[0].drehung === 0 && speicher.backgrounds[0].deckkraft === 1, `Drehung 45 → 0, Deckkraft 7 → 1: ${speicher.backgrounds[0].drehung}, ${speicher.backgrounds[0].deckkraft}`);
   const alt = JSON.parse(await ladeText());
   wahr(pruefeImport(JSON.stringify(alt)).ok && pruefeImport(JSON.stringify({ ...alt, schemaVersion: 2 })).ok, 'Versionen 1 und 2 bleiben lesbar');
-  const zukunft = pruefeImport(JSON.stringify({ ...alt, schemaVersion: 4 }));
-  wahr(!zukunft.ok && zukunft.fehler[0].includes('Version 3'), 'Version 4 wird abgelehnt');
+  const zukunft = pruefeImport(JSON.stringify({ ...alt, schemaVersion: 5 }));
+  wahr(!zukunft.ok && zukunft.fehler[0].includes('Version 4'), 'Version 5 wird abgelehnt');
 });
 
 test('Größenanzeige vorab: Datei mit Fotos ist rund ein Drittel größer als die Bilddaten plus die Datei ohne Fotos', async () => {

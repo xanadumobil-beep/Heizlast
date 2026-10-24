@@ -4,16 +4,17 @@
 //   settings, zones, components, openingTypes, rooms, surfaces, radiators, consumption, meta
 // Stufe 2: photos (Fotos je Raum, Blob), markers (Markierungen auf Fotos), backgrounds (Bauplan je Geschoss, Blob)
 // Stufe 3: scenarios (Szenarien mit Abweichungen gegenüber dem Ist-Zustand)
+// Geräteprüfung: heatpumps (Wärmepumpen-Katalog, unabhängig vom Haus und deshalb auch im Szenario-Betrieb bearbeitbar)
 
 import { standardEinstellungen, standardZonen } from './schemas.js';
 import { mitStabilenIds } from './modell.js';
 
 const DB_NAME = 'heizlast';
-const DB_VERSION = 2; // 2: Speicher "backgrounds" für die Baupläne
+const DB_VERSION = 3; // 2: Speicher "backgrounds" für die Baupläne, 3: Speicher "heatpumps" für den Wärmepumpen-Katalog
 
 export const STORES = [
   'settings', 'zones', 'components', 'openingTypes', 'rooms', 'surfaces', 'radiators', 'consumption', 'meta',
-  'photos', 'markers', 'scenarios', 'backgrounds',
+  'photos', 'markers', 'scenarios', 'backgrounds', 'heatpumps',
 ];
 
 let dbPromise = null;
@@ -150,7 +151,7 @@ export async function ladeEinstellungen() {
 
 // Stores mit Projektdaten (ohne Einstellungen und meta).
 export const DATEN_STORES = [
-  'zones', 'components', 'openingTypes', 'rooms', 'surfaces', 'radiators', 'consumption', 'photos', 'markers', 'scenarios', 'backgrounds',
+  'zones', 'components', 'openingTypes', 'rooms', 'surfaces', 'radiators', 'consumption', 'photos', 'markers', 'scenarios', 'backgrounds', 'heatpumps',
 ];
 
 // Fotos, Markierungen und Baupläne: Sie lassen sich beim Import auf Wunsch behalten (siehe ersetzeAlles).
@@ -167,7 +168,8 @@ export async function ladeAlles() {
 // Die Markierung "init" bleibt erhalten, damit die Standardzone nicht wieder erscheint und der Beginn der Nutzung gilt.
 // behalteFotos: Fotos, Markierungen und Baupläne werden weder gelöscht noch aus dem Speicher überschrieben
 // (für Dateien ohne Fotos, wenn die vorhandenen Fotos erhalten bleiben sollen).
-export async function ersetzeAlles(speicher, sicherung = null, { behalteFotos = false } = {}) {
+// behalteKatalog: Der Wärmepumpen-Katalog bleibt unverändert (für ältere Dateien, die keinen Katalog enthalten).
+export async function ersetzeAlles(speicher, sicherung = null, { behalteFotos = false, behalteKatalog = false } = {}) {
   if (schreibschutz) throw new SchreibschutzFehler();
   const bisher = await lade('meta', 'init');
   const db = await oeffneDb();
@@ -177,10 +179,11 @@ export async function ersetzeAlles(speicher, sicherung = null, { behalteFotos = 
     transaktion.onerror = () => fehler(transaktion.error);
     transaktion.onabort = () => fehler(transaktion.error);
     try {
-      const stores = [...DATEN_STORES, 'settings'].filter((n) => !(behalteFotos && FOTO_STORES.includes(n)));
+      const behalten = (n) => (behalteFotos && FOTO_STORES.includes(n)) || (behalteKatalog && n === 'heatpumps');
+      const stores = [...DATEN_STORES, 'settings'].filter((n) => !behalten(n));
       for (const name of stores) transaktion.objectStore(name).clear();
       for (const [name, liste] of Object.entries(speicher)) {
-        if (behalteFotos && FOTO_STORES.includes(name)) continue;
+        if (behalten(name)) continue;
         for (const objekt of liste) transaktion.objectStore(name).put(mitStabilenIds(name, objekt, neueId));
       }
       transaktion.objectStore('meta').put(bisher ?? { id: 'init', datum: new Date().toISOString() });
@@ -190,6 +193,21 @@ export async function ersetzeAlles(speicher, sicherung = null, { behalteFotos = 
       try { transaktion.abort(); } catch { /* schon beendet */ }
       fehler(ausnahme);
     }
+  });
+}
+
+// Wärmepumpen-Katalog aus einer Katalogdatei übernehmen, ohne Hausdaten zu berühren. modus 'ersetzen': der Katalog wird ersetzt,
+// 'hinzufuegen': Geräte kommen dazu, gleiche Kennungen werden überschrieben. Alles in einer Transaktion.
+export async function uebernehmeKatalog(geraete, modus) {
+  const db = await oeffneDb();
+  await new Promise((erfolg, fehler) => {
+    const transaktion = db.transaction('heatpumps', 'readwrite');
+    transaktion.oncomplete = () => erfolg();
+    transaktion.onerror = () => fehler(transaktion.error);
+    transaktion.onabort = () => fehler(transaktion.error);
+    const store = transaktion.objectStore('heatpumps');
+    if (modus === 'ersetzen') store.clear();
+    for (const g of geraete) store.put(g);
   });
 }
 

@@ -19,7 +19,7 @@ test('Hauptband: acht Punkte in der vorgegebenen Reihenfolge', () => {
 test('Unterreiter: Gebäude, Grundlagen und ⚙ haben welche, die übrigen Bereiche genau eine Seite', () => {
   const ids = (b) => seitenVon(b).map((s) => s.id).join(',');
   wahr(ids('gebaeude') === 'raeume,plan', ids('gebaeude'));
-  wahr(ids('grundlagen') === 'bauteile,oeffnungen,zonen,rechenannahmen', ids('grundlagen'));
+  wahr(ids('grundlagen') === 'bauteile,oeffnungen,zonen,waermepumpen,rechenannahmen', ids('grundlagen'));
   wahr(ids('system') === 'sicherung,app', ids('system'));
   for (const b of ['ergebnis', 'heizkoerper', 'szenarien', 'abgleich', 'bericht']) {
     wahr(seitenVon(b).length === 1 && !sichtbarerUnterreiter(b), `${b}: eine Seite, kein Unterreiter`);

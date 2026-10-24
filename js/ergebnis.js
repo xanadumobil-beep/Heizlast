@@ -2,9 +2,7 @@
 // Außentemperaturen, Plausibilität und Datenqualität. Reine Funktionen ohne Oberfläche.
 // Der Bildschirm (views/ergebnis.js) und der Bericht (bericht.js) nutzen dieselben Zahlen und Texte.
 //
-// Wärmepumpen-Katalog (nur beschrieben, noch nicht gebaut, siehe examples/format-beschreibung.md):
-//   Später kann ein Katalog von Wärmepumpenmodellen mit Heizleistung bei mehreren Außen- und Vorlauftemperaturen,
-//   kleinster Leistung und Schallleistung gegen die hier berechnete Heizlastlinie geprüft werden.
+// Die Geräteprüfung (Wärmepumpen aus dem Katalog gegen die Heizlastlinie) steht in geraete.js.
 
 import { formatZahl } from './engine/format.js';
 import { VORLAUF_MAX } from './engine/vorlauf.js';

@@ -5,19 +5,21 @@
 // Aufbau:
 //   { format: 'heizlast-projekt', schemaVersion: 3, exportiertAm: ISO-Zeit, app: 'Heizlast',
 //     daten: { einstellungen, zonen, bauteile, oeffnungstypen, raeume, raumflaechen, heizkoerper, verbrauch,
-//              fotos, markierungen, szenarien, hintergruende } }
+//              fotos, markierungen, szenarien, hintergruende, waermepumpen } }
 // Öffnungen stecken in den Raumflächen. Version 2 (Stufe 3) enthält Szenarien, Version 3 (Stufe 2) Fotos, Markierungen und
-// Baupläne (Hintergrundbilder je Geschoss, Bilddaten als data-URL). Dateien der Versionen 1 und 2 bleiben lesbar.
+// Baupläne (Hintergrundbilder je Geschoss, Bilddaten als data-URL), Version 4 den Wärmepumpen-Katalog. Dateien der Versionen 1 bis 3 bleiben lesbar.
+// Eine eigene Katalogdatei (format 'heizlast-waermepumpenkatalog') enthält nur { daten: { waermepumpen } }, siehe baueKatalogExport.
 
-import { standardEinstellungen, ZONENARTEN, BAUTEILARTEN, OEFFNUNGSARTEN, QUELLEN, STATI, GESCHOSSE, BAUARTEN_HK, HK_STATI, VENTILE, werte } from './schemas.js';
+import { standardEinstellungen, normalisiereWaermepumpe, ZONENARTEN, BAUTEILARTEN, OEFFNUNGSARTEN, QUELLEN, STATI, GESCHOSSE, BAUARTEN_HK, HK_STATI, VENTILE, werte } from './schemas.js';
 import { doppelteIds, migriereVerbrauch, kennlinieZuText, mitStabilenIds } from './modell.js';
 import { normalisiereSzenario, validiereSzenario, wendeSzenarioAn } from './szenario.js';
 import {
-  validiereZone, validiereBauteil, validiereOeffnungstyp, validiereRaumEingabe, validiereHeizkoerper, validiereVerbrauch,
+  validiereWaermepumpe, validiereZone, validiereBauteil, validiereOeffnungstyp, validiereRaumEingabe, validiereHeizkoerper, validiereVerbrauch,
 } from './validate.js';
 
 export const FORMAT_KENNUNG = 'heizlast-projekt';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4; // 4: Wärmepumpen-Katalog (waermepumpen)
+export const KATALOG_KENNUNG = 'heizlast-waermepumpenkatalog';
 export const SICHERUNG_FRIST_TAGE = 14;
 
 // Interner Speicher (IndexedDB) und Schlüssel in der Datei. Die Einstellungen sind ein einzelnes Objekt.
@@ -33,6 +35,7 @@ export const DATEI_SCHLUESSEL = {
   markers: 'markierungen',
   scenarios: 'szenarien',
   backgrounds: 'hintergruende',
+  heatpumps: 'waermepumpen',
 };
 
 const TAG_MS = 24 * 60 * 60 * 1000;
@@ -162,6 +165,7 @@ export function inhaltsHinweise(d) {
   }
   for (const v of d.consumption) sammle('Verbrauchsabgleich', v.name, validiereVerbrauch(v));
   for (const sz of d.scenarios ?? []) sammle('Szenario', sz.name, validiereSzenario(sz));
+  for (const g of d.heatpumps ?? []) sammle('Wärmepumpe', [g.hersteller, g.modell].filter(Boolean).join(' '), validiereWaermepumpe(g));
   return meldungen;
 }
 
@@ -203,6 +207,9 @@ export function pruefeImport(text) {
   } catch {
     return { ok: false, fehler: ['Die Datei ist kein gültiges JSON. Bitte eine Sicherungsdatei aus der Heizlast-App wählen.'] };
   }
+  if (istObjekt(datei) && datei.format === KATALOG_KENNUNG) {
+    return { ok: false, fehler: ['Das ist eine Katalogdatei mit Wärmepumpen, keine Sicherung. Sie lässt sich unter Grundlagen → Wärmepumpen importieren.'] };
+  }
   if (!istObjekt(datei) || datei.format !== FORMAT_KENNUNG) {
     return { ok: false, fehler: ['Das ist keine Heizlast-Sicherung (die Kennung „heizlast-projekt“ fehlt).'] };
   }
@@ -225,6 +232,7 @@ export function pruefeImport(text) {
   for (const [store, schluessel] of Object.entries(DATEI_SCHLUESSEL)) speicher[store] = datei.daten[schluessel] ?? [];
   speicher.consumption = speicher.consumption.map(migriereVerbrauch);
   speicher.scenarios = speicher.scenarios.map(normalisiereSzenario);
+  speicher.heatpumps = speicher.heatpumps.map(normalisiereWaermepumpe);
   const fotoHinweise = bereinigeFotos(speicher);
   // IDs ergänzen, wo es erlaubt ist (Öffnungen ohne ID), damit sie danach dauerhaft sind.
   speicher.surfaces = speicher.surfaces.map((f) => mitStabilenIds('surfaces', f, () => `oeffnung-${Math.random().toString(36).slice(2, 12)}`));
@@ -241,6 +249,8 @@ export function pruefeImport(text) {
     zusammenfassung: zusammenfassung(speicher),
     verweise: [...pruefeVerweise(speicher), ...fotoHinweise],
     fotoInfo: fotoInfo(speicher),
+    // Ältere Dateien (vor Version 4) enthalten keinen Katalog: Beim Import bleibt der vorhandene dann erhalten.
+    hatKatalog: datei.daten.waermepumpen !== undefined,
     inhalt: inhaltsHinweise(speicher),
   };
 }
@@ -261,6 +271,7 @@ export function zusammenfassung(speicher) {
     fotos: anzahl('photos'),
     markierungen: anzahl('markers'),
     hintergruende: anzahl('backgrounds'),
+    waermepumpen: anzahl('heatpumps'),
   };
 }
 
@@ -277,7 +288,53 @@ export const ZUSAMMENFASSUNG_NAMEN = {
   fotos: 'Fotos',
   markierungen: 'Markierungen auf Fotos',
   hintergruende: 'Baupläne (Hintergrundbilder)',
+  waermepumpen: 'Wärmepumpen im Katalog',
 };
+
+// --- Katalogdatei (nur Wärmepumpen) --------------------------------------------------------
+
+export function katalogDateiname(jetzt = new Date()) {
+  return `heizlast-waermepumpenkatalog-${jetzt.getFullYear()}-${zwei(jetzt.getMonth() + 1)}-${zwei(jetzt.getDate())}.json`;
+}
+
+// geraete: Einträge aus dem Speicher 'heatpumps'. Die Datei enthält keine Hausdaten.
+export function baueKatalogExport(geraete, jetzt = new Date()) {
+  return { format: KATALOG_KENNUNG, schemaVersion: SCHEMA_VERSION, exportiertAm: jetzt.toISOString(), app: 'Heizlast', daten: { waermepumpen: geraete } };
+}
+
+// Prüft eine Katalogdatei. Rückgabe { ok: false, fehler } oder { ok: true, geraete, exportiertAm, hinweise }.
+export function pruefeKatalogImport(text) {
+  let datei;
+  try {
+    datei = JSON.parse(text);
+  } catch {
+    return { ok: false, fehler: ['Die Datei ist kein gültiges JSON.'] };
+  }
+  if (istObjekt(datei) && datei.format === FORMAT_KENNUNG) {
+    return { ok: false, fehler: ['Das ist eine Sicherung mit Hausdaten, keine Katalogdatei. Sie lässt sich unter ⚙ → Sicherung importieren.'] };
+  }
+  if (!istObjekt(datei) || datei.format !== KATALOG_KENNUNG) {
+    return { ok: false, fehler: ['Das ist keine Katalogdatei (die Kennung „heizlast-waermepumpenkatalog“ fehlt).'] };
+  }
+  if (!Number.isInteger(datei.schemaVersion) || datei.schemaVersion < 4) return { ok: false, fehler: ['Die Formatversion der Datei fehlt oder ist ungültig.'] };
+  if (datei.schemaVersion > SCHEMA_VERSION) {
+    return { ok: false, fehler: [`Die Datei hat Formatversion ${datei.schemaVersion}. Diese App kennt nur Version ${SCHEMA_VERSION}. Bitte die App aktualisieren.`] };
+  }
+  const liste = datei.daten?.waermepumpen;
+  if (!Array.isArray(liste)) return { ok: false, fehler: ['Im Feld „daten“ fehlt die Liste „waermepumpen“.'] };
+  const fehler = [];
+  const gesehen = new Set();
+  liste.forEach((g, i) => {
+    if (!istObjekt(g)) fehler.push(`Eintrag ${i + 1}: kein Objekt.`);
+    else if (typeof g.id !== 'string' || g.id.trim() === '') fehler.push(`Eintrag ${i + 1}: Es fehlt die ID.`);
+    else if (gesehen.has(g.id)) fehler.push(`Die ID „${g.id}“ kommt doppelt vor.`);
+    else gesehen.add(g.id);
+  });
+  if (fehler.length > 0) return { ok: false, fehler };
+  const geraete = liste.map(normalisiereWaermepumpe);
+  const hinweise = geraete.flatMap((g) => validiereWaermepumpe(g).map((m) => `${[g.hersteller, g.modell].filter(Boolean).join(' ') || g.id}: ${m.text}`));
+  return { ok: true, geraete, exportiertAm: typeof datei.exportiertAm === 'string' ? datei.exportiertAm : null, hinweise };
+}
 
 // --- Sicherungsstatus --------------------------------------------------------------------
 

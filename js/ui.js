@@ -101,6 +101,39 @@ function baueFeld(feld, wert, beiAenderung) {
       eingabe.checked = Boolean(wert);
       return { eingabe, lies: () => eingabe.checked, inline: true };
     }
+    case 'datum': {
+      const eingabe = el('input', { type: 'date', value: wert ?? '', onInput: beiAenderung, onChange: beiAenderung });
+      return { eingabe, lies: () => eingabe.value, setze: (w) => { eingabe.value = w ?? ''; } };
+    }
+    case 'punkte': {
+      // Tabelle mit beliebig vielen Zeilen. feld.spalten: [{ key, label, einheit }]. Leere Zeilen werden beim Lesen ausgelassen,
+      // unlesbare Eingaben bleiben als NaN erhalten (die Prüfung meldet sie).
+      const tabelle = el('tbody', {});
+      const zeilen = [];
+      const neueZeile = (punkt = {}) => {
+        const felder = feld.spalten.map((s) => textfeld(zahlZuText(punkt[s.key]), beiAenderung, true));
+        const tr = el('tr', {}, felder.map((f, i) => el('td', {}, el('span', { class: 'mit-einheit' }, f), el('span', { class: 'einheit' }, feld.spalten[i].einheit ?? ''))));
+        const eintrag = { felder, tr };
+        const weg = el('button', { type: 'button', class: 'klein', 'aria-label': 'Zeile entfernen', onClick: () => { zeilen.splice(zeilen.indexOf(eintrag), 1); tr.remove(); beiAenderung(); } }, '✕');
+        tr.append(el('td', {}, weg));
+        zeilen.push(eintrag);
+        tabelle.append(tr);
+      };
+      for (const p of wert ?? []) neueZeile(p);
+      const eingabe = el(
+        'div', { class: 'punktetabelle' },
+        el('div', { class: 'tabellenrahmen' }, el(
+          'table', { class: 'tabelle' },
+          el('thead', {}, el('tr', {}, feld.spalten.map((s) => el('th', { scope: 'col' }, s.label)), el('th', {}, ''))),
+          tabelle,
+        )),
+        el('button', { type: 'button', onClick: () => { neueZeile(); beiAenderung(); } }, '+ Zeile'),
+      );
+      const lies = () => zeilen
+        .map((z) => Object.fromEntries(feld.spalten.map((s, i) => [s.key, parseDezimal(z.felder[i].value)])))
+        .filter((p) => Object.values(p).some((x) => x !== null));
+      return { eingabe, lies };
+    }
     case 'abschnitt':
       return { eingabe: null, lies: () => undefined, abschnitt: true };
     default:
@@ -181,7 +214,7 @@ export function baueFormular(felder, werte, beiAenderung = () => {}) {
     let zeile;
     if (abschnitt) {
       zeile = el('div', { class: 'abschnitt' }, el('h3', {}, feld.label), hinweis(feld), meldungen);
-    } else if (feld.typ === 'bereich') {
+    } else if (feld.typ === 'bereich' || feld.typ === 'punkte') {
       // Bereichsfelder enthalten eigene Labels, die übrigen werden vom Label umschlossen.
       zeile = el('div', { class: 'feld' }, el('span', { class: 'beschriftung' }, feld.label), eingabe, hinweis(feld), meldungen);
     } else {

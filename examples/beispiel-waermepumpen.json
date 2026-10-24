@@ -1,0 +1,43 @@
+{
+  "format": "heizlast-waermepumpenkatalog",
+  "schemaVersion": 4,
+  "exportiertAm": "2026-10-24T08:00:00.000Z",
+  "app": "Heizlast",
+  "daten": {
+    "waermepumpen": [
+      {
+        "id": "wp-beispiel-alpha",
+        "hersteller": "Beispiel-Hersteller",
+        "modell": "Alpha 9",
+        "typ": "Alpha 9 Monoblock, 1-phasig",
+        "anbieter": "Beispiel-Angebot (erfunden)",
+        "preis": { "min": 9500, "max": 11000 },
+        "datenblatt": "https://example.invalid/alpha-9-datenblatt.pdf",
+        "notiz": "Erfundenes Gerät für Tests, die Werte stammen nicht aus einem echten Datenblatt.",
+        "bafa": { "foerderfaehig": "ja", "nennleistung55": 8.6, "eta35": 190, "eta55": 150, "kaeltemittel": "R290", "stand": "2026-01-15" },
+        "punkte": [
+          { "aussen": -7, "vorlauf": 35, "max": 9.0, "min": null, "cop": 2.9 },
+          { "aussen": -7, "vorlauf": 55, "max": 7.0, "min": null, "cop": 2.0 },
+          { "aussen": 2, "vorlauf": 35, "max": 10.5, "min": null, "cop": 3.9 },
+          { "aussen": 2, "vorlauf": 55, "max": 8.5, "min": null, "cop": 2.7 },
+          { "aussen": 7, "vorlauf": 35, "max": 11.0, "min": 3.0, "cop": 5.0 },
+          { "aussen": 7, "vorlauf": 55, "max": 9.5, "min": 3.2, "cop": 3.3 }
+        ],
+        "schall": 54
+      },
+      {
+        "id": "wp-beispiel-beta",
+        "hersteller": "Beispiel-Hersteller",
+        "modell": "Beta 6",
+        "typ": "",
+        "anbieter": "",
+        "preis": null,
+        "datenblatt": "",
+        "notiz": "Nur BAFA-Werte bekannt: Vorauswahl, noch keine Datenblattpunkte.",
+        "bafa": { "foerderfaehig": "unbekannt", "nennleistung55": 6.2, "eta35": 185, "eta55": 145, "kaeltemittel": "R290", "stand": "" },
+        "punkte": [],
+        "schall": 49
+      }
+    ]
+  }
+}

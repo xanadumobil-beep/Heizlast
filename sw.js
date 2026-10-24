@@ -3,13 +3,14 @@
 // Eine neue Version (geänderte VERSION) ersetzt den alten Speicher vollständig.
 
 // --- erzeugt von tools/sw-aktualisieren.js, nicht von Hand ändern ---
-const VERSION = '1228041272';
-const ERSTELLT = '2026-10-24T11:10:39.256Z';
+const VERSION = '3ed4f333f7';
+const ERSTELLT = '2026-10-24T11:29:15.633Z';
 const DATEIEN = [
   "./",
   "css/print.css",
   "css/style.css",
   "examples/beispiel-mini-haus.json",
+  "examples/beispiel-waermepumpen.json",
   "examples/format-beschreibung.md",
   "icons/icon-180.png",
   "icons/icon-192.png",
@@ -32,6 +33,7 @@ const DATEIEN = [
   "js/ergebnis.js",
   "js/foto.js",
   "js/fotoexport.js",
+  "js/geraete.js",
   "js/io.js",
   "js/jahreswaerme.js",
   "js/modell.js",
@@ -58,6 +60,7 @@ const DATEIEN = [
   "js/views/szenarien.js",
   "js/views/verbrauch.js",
   "js/views/vorlauf.js",
+  "js/views/waermepumpen.js",
   "manifest.webmanifest"
 ];
 // --- Ende des erzeugten Teils ---

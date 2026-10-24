@@ -637,3 +637,21 @@ label.knopf input.versteckt { display: none; }
 .linientabelle { width: 100%; margin-top: 6px; }
 .luecken li.rot { color: var(--fehler); }
 .plausi { margin: 4px 0; padding-left: 18px; }
+
+/* Wärmepumpen und Geräteprüfung */
+.punktetabelle { margin: 4px 0; }
+.punktetabelle td { padding: 2px 4px; }
+.punktetabelle input { width: 5.5em; min-width: 0; }
+.tabelle.punkte { width: auto; font-size: 0.9rem; }
+.auswahlzeile { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 6px 0; }
+.auswahlzeile label { display: grid; gap: 2px; }
+.geraet-pruefung h4 { margin: 0 0 6px; }
+.kriterien { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 8px; }
+.kriterium { display: grid; grid-template-columns: 1.4rem 1fr; gap: 6px; align-items: start; }
+.kriterium .ampel-punkt { font-size: 1.3rem; line-height: 1.1; }
+.kriterium.ampel-gruen .ampel-punkt { color: var(--ok); }
+.kriterium.ampel-gelb .ampel-punkt { color: var(--warnung); }
+.kriterium.ampel-rot .ampel-punkt { color: var(--fehler); }
+.kriterium.ampel-grau .ampel-punkt { color: var(--text-leise); }
+.kriterium .k-wert { font-weight: 700; }
+.kriterium .k-text { display: block; color: var(--text-leise); font-size: 0.9rem; }

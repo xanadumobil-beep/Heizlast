@@ -13,6 +13,9 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
   benötigte Wärmepumpenleistung („Benötigt: X kW Heizleistung bei −8 °C Außentemperatur und Y °C Vorlauf“), die Heizlast bei −8 bis +12 °C als Linie,
   der Verbrauchsabgleich als Plausibilitätsprüfung und eine Datenqualitäts-Ampel. Zuschläge gibt es nur auf Eingabe (Sperrzeit des Netzbetreibers in
   Stunden je Tag), jeweils mit Begründung, ohne pauschalen Sicherheitszuschlag. Oben lässt sich ein Szenario daneben stellen. Das Ergebnis ist die erste Seite des Berichts.
+- **Wärmepumpen-Katalog und Geräteprüfung:** Unter Grundlagen → Wärmepumpen legst du Geräte an (Hersteller, Modell, Angebot, Preis, BAFA-Angaben, Leistungspunkte aus dem Datenblatt, Schall).
+  Der Katalog ist in der Sicherung enthalten und lässt sich als eigene Datei ohne Hausdaten tauschen. Im Ergebnis prüft die App jedes Gerät: Vorauswahl nur mit BAFA-Werten, Prüfung mit
+  Datenblattpunkten (Deckung bei −8 °C, Bivalenzpunkt, Taktprüfung, Effizienz, Schall), je Kriterium eine Ampel mit Begründung, ohne Gesamtnote. Fehlen Werte, steht dort „nicht prüfbar“ und was fehlt.
 - **Räume und Flächen:** Maße oder Flächen, Bauteile mit U-Wert (Bereich von bis), Fenster und Türen, Zonen
   (Erdreich, Nachbar, unbeheizter Keller und so weiter), Luftwechsel je Raum.
 - **Heizlast je Raum und für das Gebäude** bei der Normaußentemperatur, als Bandbreite, mit Gegenprobe der
@@ -49,7 +52,7 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
 
 Das Hauptband hat acht Punkte, die auf dem iPad im Hoch- und Querformat ohne Scrollen passen (auf dem iPhone mit Symbol und kurzem Text):
 **Ergebnis**, **Gebäude** (Unterreiter Räume, Plan), **Heizkörper** (Heizkörper & Vorlauf), **Szenarien**, **Abgleich** (Verbrauchsabgleich),
-**Bericht**, **Grundlagen** (Unterreiter Bauteile, Öffnungen, Zonen, Rechenannahmen) und **⚙** (Unterreiter Sicherung, App). Der Unterreiter erscheint
+**Bericht**, **Grundlagen** (Unterreiter Bauteile, Öffnungen, Zonen, Wärmepumpen, Rechenannahmen) und **⚙** (Unterreiter Sicherung, App). Der Unterreiter erscheint
 als zweite Leiste unter dem Hauptband. Die App merkt sich den zuletzt geöffneten Bereich und je Bereich die zuletzt gewählte Seite.
 Die Rechenannahmen enthalten Projektname, Normaußentemperatur, Luftwechsel, ΔU_WB, f_g, Aufheizzuschlag, Spreizung, Heizkörperexponent, Ziel-Vorlauf und Sperrzeit.
 Unter ⚙ → App stehen Version und Updates, App-Speicher und dauerhafter Speicher.

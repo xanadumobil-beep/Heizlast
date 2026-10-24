@@ -47,10 +47,10 @@ const pruefe = (bedingung, text) => { if (!bedingung) { fehler += 1; console.log
     ['szenarien', 'Szenarien', ['Szenarien']],
     ['abgleich', 'Verbrauchsabgleich', ['Verbrauchsabgleich']],
     ['bericht', 'Bericht', ['Bericht']],
-    ['grundlagen', 'Bauteile', ['Bauteile', 'Öffnungen', 'Zonen', 'Rechenannahmen']],
+    ['grundlagen', 'Bauteile', ['Bauteile', 'Öffnungen', 'Zonen', 'Wärmepumpen', 'Rechenannahmen']],
     ['system', 'Sicherung', ['Sicherung', 'App']],
   ];
-  const kopfTexte = { Ergebnis: 'Ergebnis', Räume: 'Räume', Plan: 'Plan', 'Heizkörper & Vorlauf': 'Heizkörper & Vorlauf', Szenarien: 'Szenarien', Verbrauchsabgleich: 'Verbrauchsabgleich', Bericht: 'Bericht', Bauteile: 'Bauteile', Öffnungen: 'Öffnungen', Zonen: 'Zonen', Rechenannahmen: 'Rechenannahmen', Sicherung: 'Sicherung', App: 'App' };
+  const kopfTexte = { Ergebnis: 'Ergebnis', Räume: 'Räume', Plan: 'Plan', 'Heizkörper & Vorlauf': 'Heizkörper & Vorlauf', Szenarien: 'Szenarien', Verbrauchsabgleich: 'Verbrauchsabgleich', Bericht: 'Bericht', Bauteile: 'Bauteile', Öffnungen: 'Öffnungen', Zonen: 'Zonen', Wärmepumpen: 'Wärmepumpen', Rechenannahmen: 'Rechenannahmen', Sicherung: 'Sicherung', App: 'App' };
   for (const [id, erste, unter] of bereiche) {
     await seite.click(`#navigation a[data-bereich="${id}"]`);
     await seite.waitForTimeout(250);
@@ -91,6 +91,32 @@ const pruefe = (bedingung, text) => { if (!bedingung) { fehler += 1; console.log
   await seite.waitForTimeout(400);
   const appText = await seite.locator('main').innerText();
   pruefe(appText.includes('App-Version') && appText.includes('Dauerhafter Speicher') && appText.includes('App-Speicher leeren'), 'App: Version, Updates, App-Speicher, dauerhafter Speicher');
+
+  // Wärmepumpen-Katalog: Beispielkatalog importieren, Geräteprüfung im Ergebnis
+  await seite.goto(`${ADRESSE}#waermepumpen`);
+  await seite.waitForSelector('input[type=file]', { state: 'attached' });
+  await seite.setInputFiles('input[type=file]', `${__dirname}/../../examples/beispiel-waermepumpen.json`);
+  await seite.getByRole('button', { name: 'Katalog ersetzen' }).click();
+  await seite.waitForSelector('[data-geraet="Beispiel-Hersteller Alpha 9"]');
+  pruefe(await seite.locator('.geraet-karte').count() === 2, 'Katalog importiert: zwei Geräte');
+  await seite.locator('[data-geraet="Beispiel-Hersteller Alpha 9"] button:text-is("Bearbeiten")').click();
+  await seite.waitForSelector('dialog .punktetabelle');
+  pruefe(await seite.locator('dialog .punktetabelle tbody tr').count() === 6, 'Bearbeiten: sechs Leistungspunkte in der Tabelle');
+  await seite.click('dialog .punktetabelle >> text=+ Zeile');
+  pruefe(await seite.locator('dialog .punktetabelle tbody tr').count() === 7, 'Neue Zeile hinzufügen');
+  await seite.locator('dialog button:text-is("Speichern")').click();
+  await seite.waitForSelector('dialog', { state: 'detached' });
+  pruefe(await seite.locator('[data-geraet="Beispiel-Hersteller Alpha 9"] table.punkte tbody tr').count() === 6, 'Speichern: leere Zeile wird ausgelassen, sechs Punkte bleiben');
+  await seite.goto(`${ADRESSE}#ergebnis`);
+  await seite.waitForSelector('[data-geraetepruefung] .geraet-pruefung');
+  const stufen = await seite.locator('[data-geraetepruefung] .geraet-pruefung').evaluateAll((l) => l.map((x) => `${x.dataset.geraet}:${x.dataset.stufe}`));
+  pruefe(stufen.join() === 'Beispiel-Hersteller Alpha 9:B,Beispiel-Hersteller Beta 6:A', `Geräteprüfung: geprüft vor vorausgewählt (${stufen})`);
+  const alpha = await seite.locator('[data-geraet="Beispiel-Hersteller Alpha 9"].geraet-pruefung').innerText();
+  pruefe(alpha.includes('Deckung bei Auslegung') && alpha.includes('Bivalenzpunkt') && alpha.includes('Taktprüfung'), 'Karte Stufe B zeigt Deckung, Bivalenzpunkt und Takt');
+  const beta = await seite.locator('[data-geraet="Beispiel-Hersteller Beta 6"].geraet-pruefung').innerText();
+  pruefe(beta.includes('Vorauswahl') && beta.includes('−10 °C'), 'Karte Stufe A: Vorauswahl mit Hinweis');
+  await seite.selectOption('[data-sortierung]', 'name');
+  pruefe(await seite.locator('[data-geraetepruefung] .geraet-pruefung').count() === 2, 'Sortierung ändern');
 
   // Karten: Löschen rechts abgesetzt, in derselben Zeile wie Bearbeiten und Kopieren
   await seite.goto(`${ADRESSE}#zonen`);

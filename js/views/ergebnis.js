@@ -7,6 +7,8 @@ import { el, ersetzeKinder } from '../ui.js';
 import { formatZahl, parseDezimal, zahlZuText } from '../engine/format.js';
 import { ladeIstProjekt, ladeSzenarien, ladeAktivesSzenario } from '../daten.js';
 import { wendeSzenarioAn } from '../szenario.js';
+import { normalisiereWaermepumpe } from '../schemas.js';
+import { pruefeListe, kontextAusErgebnis, SORTIERUNGEN, VORAUSWAHL_HINWEIS, SCHWELLEN } from '../geraete.js';
 import { watt, wattBereichVon } from '../anzeige.js';
 import {
   baueErgebnis, benoetigtText, ampelText, zaehlerText, liniePunktText, waermepumpenannahmen, TYPEN_HINWEIS, MILD_HINWEIS,
@@ -22,6 +24,9 @@ const s = (tag, eigenschaften = {}) => {
 
 // Gewählter Vergleich (id eines Szenarios oder ''), bleibt beim Wechseln der Ansicht erhalten.
 let vergleichsWahl = null;
+// Ansicht (Szenario-Kennung oder '') und Sortierung der Geräteprüfung.
+let pruefWahl = '';
+let pruefSortierung = 'stufe';
 
 const kW = (w, stellen = 1) => `${formatZahl(w / 1000, stellen)} kW`;
 
@@ -138,6 +143,25 @@ function plausiKarte(erg, szenarioAnsicht) {
   )));
 }
 
+const AMPEL_TEXT = { gruen: 'grün', gelb: 'gelb', rot: 'rot', grau: 'neutral' };
+
+function geraeteKarte(r, k) {
+  return el(
+    'article', { class: `karte geraet-pruefung stufe-${r.stufe}`, 'data-geraet': r.name, 'data-stufe': r.stufe },
+    el(
+      'h4', {}, r.name,
+      el('span', { class: 'marke' }, r.stufe === 'B' ? 'Prüfung (Stufe B)' : r.stufe === 'A' ? 'Vorauswahl (Stufe A)' : 'keine Werte'),
+    ),
+    r.hinweis ? el('p', { class: 'meldung hinweis' }, r.hinweis) : null,
+    r.fehlend.length > 0 ? el('p', { class: 'meldung warnung' }, `Nicht prüfbar: ${r.fehlend.join(', ')}`) : null,
+    el('ul', { class: 'kriterien' }, r.kriterien.map((c) => el(
+      'li', { class: `kriterium ampel-${c.ampel}`, 'data-kriterium': c.id },
+      el('span', { class: 'ampel-punkt', role: 'img', 'aria-label': `Ampel ${AMPEL_TEXT[c.ampel]}` }, '●'),
+      el('span', { class: 'k-inhalt' }, el('strong', {}, c.name), ': ', el('span', { class: 'k-wert' }, c.wert), el('span', { class: 'k-text' }, c.text)),
+    ))),
+  );
+}
+
 function listeDerLuecken(erg) {
   const q = erg.qualitaet;
   return el(
@@ -194,6 +218,51 @@ export async function renderErgebnis(container, neuLaden) {
   );
   const abschnitt = (titel, inhalt, extra = {}) => el('section', { class: 'karte ergebnis-abschnitt', ...extra }, el('h3', {}, titel), inhalt);
 
+  // Geräteprüfung: Wärmepumpen aus dem Katalog gegen die Heizlast, für den Ist-Zustand oder ein gewähltes Szenario.
+  const katalog = (await db.alle('heatpumps')).map(normalisiereWaermepumpe);
+  if (pruefWahl && !szenarien.some((x) => x.id === pruefWahl)) pruefWahl = '';
+  const geraeteSektion = el('div', { 'data-geraetepruefung': true });
+  const zeichneGeraete = () => {
+    const sz = szenarien.find((x) => x.id === pruefWahl) ?? null;
+    const erg = !sz ? ergIst : sz.id === szenario?.id ? ergSz : baueErgebnis({ ...wendeSzenarioAn(ist, sz).projekt, szenario: { id: sz.id, name: sz.name } }, { mitVerbrauch: false });
+    const k = kontextAusErgebnis(erg);
+    const ansichtWahl = el('select', { 'aria-label': 'Ansicht der Geräteprüfung', 'data-pruefansicht': true }, el('option', { value: '' }, 'Ist-Zustand'), szenarien.map((x) => el('option', { value: x.id }, `Szenario: ${x.name}`)));
+    ansichtWahl.value = pruefWahl;
+    ansichtWahl.addEventListener('change', () => { pruefWahl = ansichtWahl.value; zeichneGeraete(); });
+    const sortWahl = el('select', { 'aria-label': 'Sortieren nach', 'data-sortierung': true }, SORTIERUNGEN.map((s) => el('option', { value: s.id }, s.text)));
+    sortWahl.value = pruefSortierung;
+    sortWahl.addEventListener('change', () => { pruefSortierung = sortWahl.value; zeichneGeraete(); });
+    const liste = k ? pruefeListe(katalog, k, pruefSortierung) : [];
+    ersetzeKinder(
+      geraeteSektion,
+      el('p', { class: 'zeile' }, 'Wärmepumpen aus dem Katalog gegen die Heizlast. Je Kriterium eine Ampel mit Begründung, keine Gesamtnote und kein Sieger. Geprüfte Geräte (Datenblattpunkte) stehen vor vorausgewählten (nur BAFA-Werte).'),
+      el('div', { class: 'auswahlzeile' }, el('label', {}, el('span', { class: 'klein' }, 'Prüfung für'), ansichtWahl), el('label', {}, el('span', { class: 'klein' }, 'Sortieren nach'), sortWahl)),
+      !k ? el('p', { class: 'meldung warnung' }, 'Ohne berechenbare Heizlast lässt sich kein Gerät prüfen.')
+        : el(
+          'p', { class: 'zeile' },
+          `Geprüft gegen: obere Grenze ${formatZahl(k.obereKW, 2)} kW bei ${k.thetaE < 0 ? '−' : ''}${Math.abs(k.thetaE)} °C, `
+          + (k.vorlauf === null ? `nötiger Vorlauf nicht bestimmbar (${k.vorlaufGrund}).` : `nötiger Vorlauf ${formatZahl(k.vorlauf, 1)} °C.`),
+        ),
+      katalog.length === 0
+        ? el('p', { class: 'leer' }, 'Der Katalog ist leer. ', el('a', { href: '#waermepumpen' }, 'Wärmepumpen anlegen oder importieren'))
+        : liste.map((r) => geraeteKarte(r, k)),
+      el(
+        'details', { class: 'hilfe' },
+        el('summary', {}, 'Wie die Ampeln gebildet werden'),
+        el(
+          'ul', {},
+          el('li', {}, 'Deckung: maximale Heizleistung bei −8 °C und nötigem Vorlauf (linear zwischen den Datenblattpunkten, höchstens 3 K darüber hinaus) im Verhältnis zur oberen Grenze der Gebäudeheizlast. Grün ab 100 %, gelb ab 85 %, sonst rot.'),
+          el('li', {}, `Bivalenzpunkt: Außentemperatur, bei der die maximale Leistung der Heizlastlinie (obere Grenze) entspricht. Darunter deckt ein Heizstab den Rest. Grün ohne Heizstab bis −8 °C, gelb bis ${SCHWELLEN.bivalenzGelbBis} °C, sonst rot.`),
+          el('li', {}, 'Takt: minimale Leistung gegen die untere Grenze der Heizlast bei +7 °C und +2 °C. Grün bis +7 °C, gelb bis +2 °C, sonst rot.'),
+          el('li', {}, 'Effizienz und Schall: nur Vergleich der Geräte untereinander (bester Wert grün, schlechtester rot).'),
+          el('li', {}, `Vorauswahl: ${VORAUSWAHL_HINWEIS} Grün bei einem Verhältnis von 0,9 bis 1,3, gelb von 0,75 bis 0,9 und von 1,3 bis 1,6, sonst rot.`),
+          el('li', {}, 'Die Schwellen für Deckung und Bivalenzpunkt sind Annahmen der App.'),
+        ),
+      ),
+    );
+  };
+  zeichneGeraete();
+
   const luecken = ergebnisse.map(listeDerLuecken);
   const springe = (i) => () => {
     luecken[i].open = true;
@@ -228,6 +297,7 @@ export async function renderErgebnis(container, neuLaden) {
       spalten((erg) => linieKarte(erg)),
       el('p', { class: 'meldung hinweis' }, MILD_HINWEIS),
     )),
+    abschnitt('Geräteprüfung', geraeteSektion),
     abschnitt('Plausibilität: Verbrauchsabgleich', spalten((erg, i) => plausiKarte(erg, i > 0))),
     abschnitt('Datenqualität', spalten((erg, i) => luecken[i])),
   );

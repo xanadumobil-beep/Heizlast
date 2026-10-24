@@ -8,6 +8,7 @@
 import { zahlZuText } from './engine/format.js';
 import { parseKennlinie, normleistungVon } from './modell.js';
 import { gradtage } from './engine/verbrauch.js';
+import { fehlendeWerte } from './geraete.js';
 
 const fehler = (feld, text) => ({ feld, stufe: 'fehler', text });
 const warnung = (feld, text) => ({ feld, stufe: 'warnung', text });
@@ -346,3 +347,42 @@ export function validiereVerbrauch(v) {
 
 // Für die Szenarien: dieselben Zahlenprüfungen mit eigenen Feldnamen.
 export { zahl as pruefeZahl, bereich as pruefeBereich, fehler as fehlerMeldung, warnung as warnMeldung };
+
+// Wärmepumpe im Katalog. Fehler: unlesbare oder widersprüchliche Angaben. Warnungen: unplausible Werte und fehlende Pflichtwerte
+// für die Prüfung (die Wärmepumpe lässt sich trotzdem ablegen, die App nennt dann, was fehlt).
+export function validiereWaermepumpe(g) {
+  const meldungen = [...pflichtText('modell', g.modell, 'Modell')];
+  const optionalZahl = (feld, wert, opt) => (wert === null || wert === undefined ? [] : zahl(feld, wert, opt));
+  if (g.preis) {
+    meldungen.push(...bereich('preis', g.preis, { name: 'Preis', einheit: '€', fehlerWennKleiner: 0 }));
+  }
+  if (typeof g.datenblatt === 'string' && g.datenblatt.trim() !== '' && !/^https?:\/\//i.test(g.datenblatt.trim())) {
+    meldungen.push(warnung('datenblatt', 'Der Link beginnt nicht mit http:// oder https://, er wird deshalb nur als Text angezeigt.'));
+  }
+  const b = g.bafa ?? {};
+  meldungen.push(
+    ...optionalZahl('bafa.nennleistung55', b.nennleistung55, { name: 'BAFA-Nennleistung', einheit: 'kW', fehlerWennKleinerGleich: 0, warnWennUeber: 30 }),
+    ...optionalZahl('bafa.eta35', b.eta35, { name: 'ETAs 35 °C', einheit: '%', fehlerWennKleinerGleich: 0, warnWennUeber: 300, warnWennUnter: 100 }),
+    ...optionalZahl('bafa.eta55', b.eta55, { name: 'ETAs 55 °C', einheit: '%', fehlerWennKleinerGleich: 0, warnWennUeber: 300, warnWennUnter: 100 }),
+    ...optionalZahl('schall', g.schall, { name: 'Schallleistungspegel', einheit: 'dB(A)', fehlerWennKleinerGleich: 0, warnWennUeber: 90, warnWennUnter: 30 }),
+  );
+  (g.punkte ?? []).forEach((p, i) => {
+    const wo = `Leistungspunkt ${i + 1}`;
+    meldungen.push(
+      ...zahl('punkte', p.aussen, { name: `${wo}: Außentemperatur`, einheit: '°C', warnWennUeber: 40, warnWennUnter: -30 }),
+      ...zahl('punkte', p.vorlauf, { name: `${wo}: Vorlauftemperatur`, einheit: '°C', fehlerWennKleinerGleich: 0, warnWennUeber: 75 }),
+      ...optionalZahl('punkte', p.max, { name: `${wo}: maximale Heizleistung`, einheit: 'kW', fehlerWennKleinerGleich: 0, warnWennUeber: 40 }),
+      ...optionalZahl('punkte', p.min, { name: `${wo}: minimale Heizleistung`, einheit: 'kW', fehlerWennKleinerGleich: 0, warnWennUeber: 40 }),
+      ...optionalZahl('punkte', p.cop, { name: `${wo}: COP`, fehlerWennKleinerGleich: 0, warnWennUeber: 10 }),
+    );
+    if ((p.max === null || p.max === undefined) && (p.min === null || p.min === undefined)) {
+      meldungen.push(fehler('punkte', `${wo}: Bitte die maximale oder die minimale Heizleistung eintragen.`));
+    }
+    if (istZahl(p.max) && istZahl(p.min) && p.min > p.max) meldungen.push(fehler('punkte', `${wo}: Die minimale Heizleistung darf nicht größer als die maximale sein.`));
+  });
+  const fehlend = fehlendeWerte(g);
+  if (fehlend.length > 0 && (g.punkte ?? []).length > 0 && !hatFehler(meldungen)) {
+    meldungen.push(warnung('punkte', `Für die Prüfung fehlen: ${fehlend.join(', ')}. Ohne diese Werte zeigt die App „nicht prüfbar“.`));
+  }
+  return meldungen;
+}

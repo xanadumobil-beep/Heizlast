@@ -13,10 +13,10 @@ import {
 // Gibt die Datei an das Teilen-Menü (iPad: „In Dateien sichern“) oder, wenn das nicht geht, als Download.
 // Rückgabe: 'geteilt' | 'download' | 'abgebrochen'.
 // Die Datei ist vorher fertig gebaut: Safari verlangt, dass das Teilen unmittelbar auf den Tipp folgt.
-async function gibDateiAus(datei) {
+export async function gibDateiAus(datei) {
   if (navigator.share && navigator.canShare?.({ files: [datei] })) {
     try {
-      await navigator.share({ files: [datei], title: 'Heizlast-Sicherung' });
+      await navigator.share({ files: [datei], title: datei.name.replace(/\.json$/, '') });
       return 'geteilt';
     } catch (fehler) {
       if (fehler.name === 'AbortError') return 'abgebrochen';
@@ -112,7 +112,7 @@ export async function renderSicherung(container) {
     const eintrag = { zeit: pruefung.exportiertAm ?? new Date().toISOString(), art: 'import', dateiname: name };
     try {
       const daten = dateiHatFotos ? dateiFotosZuBlobs(pruefung.daten).speicher : pruefung.daten;
-      await db.ersetzeAlles(daten, eintrag, { behalteFotos });
+      await db.ersetzeAlles(daten, eintrag, { behalteFotos, behalteKatalog: !pruefung.hatKatalog });
     } catch (fehler) {
       ersetzeKinder(vorschau, el('p', { class: 'meldung fehler' }, `Der Import ist fehlgeschlagen, die bisherigen Daten sind unverändert: ${fehler.message}`));
       return;

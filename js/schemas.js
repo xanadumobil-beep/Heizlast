@@ -460,3 +460,59 @@ export function verbrauchFelder({ vorschlag }) {
     { key: 'notiz', label: 'Notiz', typ: 'notiz' },
   ];
 }
+
+// --- Wärmepumpen-Katalog -----------------------------------------------------------------------
+
+export const BAFA_STATI = [
+  { wert: 'unbekannt', label: 'unbekannt' },
+  { wert: 'ja', label: 'ja' },
+  { wert: 'nein', label: 'nein' },
+];
+
+export const WP_PUNKT_SPALTEN = [
+  { key: 'aussen', label: 'Außentemperatur', einheit: '°C' },
+  { key: 'vorlauf', label: 'Vorlauftemperatur', einheit: '°C' },
+  { key: 'max', label: 'Max. Heizleistung', einheit: 'kW' },
+  { key: 'min', label: 'Min. Heizleistung (optional)', einheit: 'kW' },
+  { key: 'cop', label: 'COP (optional)', einheit: '' },
+];
+
+export const WAERMEPUMPEN_FELDER = [
+  { key: 'hersteller', label: 'Hersteller', typ: 'text' },
+  { key: 'modell', label: 'Modell', typ: 'text' },
+  { key: 'typ', label: 'Genaue Typbezeichnung', typ: 'text', hinweis: 'Zum Beispiel mit Leistungsstufe und Variante, so wie im Angebot oder Datenblatt.' },
+  { key: 'anbieter', label: 'Anbieter / Angebot', typ: 'text' },
+  { key: 'preis', label: 'Preis', typ: 'bereich', einheit: '€', optional: true, hinweis: 'Optional, als Minimum und Maximum.' },
+  { key: 'datenblatt', label: 'Link zum Datenblatt', typ: 'text', hinweis: 'Nur als Text oder Link gespeichert, die App ruft nichts ab.' },
+  { key: 'notiz', label: 'Notiz', typ: 'notiz' },
+  { key: 'bafa', label: 'BAFA', typ: 'abschnitt', hinweis: 'Die BAFA-Nennleistung ist kein Auslegungswert. Für die Prüfung die Heizleistung aus dem Datenblatt verwenden.' },
+  { key: 'bafa.foerderfaehig', label: 'Förderfähig', typ: 'auswahl', optionen: BAFA_STATI },
+  { key: 'bafa.nennleistung55', label: 'BAFA-Nennleistung bei 55 °C', typ: 'zahl', einheit: 'kW', hinweis: 'Nur für die grobe Vorauswahl.' },
+  { key: 'bafa.eta35', label: 'ETAs bei 35 °C', typ: 'zahl', einheit: '%' },
+  { key: 'bafa.eta55', label: 'ETAs bei 55 °C', typ: 'zahl', einheit: '%' },
+  { key: 'bafa.kaeltemittel', label: 'Kältemittel', typ: 'text' },
+  { key: 'bafa.stand', label: 'Stand der Angaben', typ: 'datum' },
+  { key: 'leistung', label: 'Leistungspunkte aus dem Datenblatt', typ: 'abschnitt', hinweis: 'Pflicht für die Prüfung: mindestens A−7 mit W35 und W55 (maximale Heizleistung) sowie ein Punkt mit minimaler Leistung bei A7 oder höher. Beliebig viele Zeilen.' },
+  { key: 'punkte', label: 'Punkte', typ: 'punkte', spalten: WP_PUNKT_SPALTEN },
+  { key: 'schall', label: 'Schallleistungspegel Außengerät', typ: 'zahl', einheit: 'dB(A)', hinweis: 'Optional. Die App vergleicht Geräte nur untereinander.' },
+];
+
+export function neueWaermepumpe() {
+  return {
+    hersteller: '', modell: '', typ: '', anbieter: '', preis: null, datenblatt: '', notiz: '',
+    bafa: { foerderfaehig: 'unbekannt', nennleistung55: null, eta35: null, eta55: null, kaeltemittel: '', stand: '' },
+    punkte: [], schall: null,
+  };
+}
+
+// Fehlende Felder ergänzen (Import, Bearbeiten): Listen, BAFA-Block, Standardwerte.
+export function normalisiereWaermepumpe(roh) {
+  const g = roh && typeof roh === 'object' ? roh : {};
+  const n = neueWaermepumpe();
+  return {
+    ...n, ...g,
+    bafa: { ...n.bafa, ...(g.bafa && typeof g.bafa === 'object' ? g.bafa : {}) },
+    punkte: Array.isArray(g.punkte) ? g.punkte : [],
+    preis: g.preis && typeof g.preis === 'object' ? g.preis : null,
+  };
+}

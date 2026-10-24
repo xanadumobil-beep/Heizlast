@@ -16,6 +16,7 @@ import { renderSicherung } from './views/sicherung.js';
 import { renderBericht } from './views/bericht.js';
 import { renderPlan } from './views/plan.js';
 import { renderErgebnis } from './views/ergebnis.js';
+import { renderWaermepumpen } from './views/waermepumpen.js';
 import { renderFoto } from './views/fotos.js';
 import { aktualisiereBanner } from './banner.js';
 import { BEREICHE, SEITEN, seitenVon, merkeSeite, zielSeite, seiteAusLink } from './navigation.js';
@@ -33,6 +34,7 @@ const RENDER = {
   bauteile: (c, neu) => renderKatalog(c, KATALOGE.bauteile, neu),
   oeffnungen: (c, neu) => renderKatalog(c, KATALOGE.oeffnungen, neu),
   zonen: (c, neu) => renderKatalog(c, KATALOGE.zonen, neu),
+  waermepumpen: (c, neu) => renderWaermepumpen(c, neu),
   rechenannahmen: (c) => renderRechenannahmen(c),
   sicherung: (c, neu) => renderSicherung(c, neu),
   app: (c) => renderApp(c),

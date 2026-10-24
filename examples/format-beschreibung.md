@@ -258,13 +258,33 @@ Seitenverhältnis des (gedrehten) Bildes an. Die Prozent-Positionen der Raum- un
 
 **Nicht ins öffentliche Repository:** Fotos und Baupläne enthalten echte Hausdaten (oft auch Namen und Adressen im Schriftfeld). Das Beispielhaus enthält keine.
 
-## Vorbereitet: Katalog der Wärmepumpenmodelle (noch nicht gebaut)
+## `daten.waermepumpen` (ab Version 4)
 
-Geplant ist ein Katalog `waermepumpen` (eigener Speicher, eigene Liste in `daten`). Ein Modell hätte: `id`, `hersteller`, `name`, `leistung` als Liste
-von Punkten `{ "aussen": <°C>, "vorlauf": <°C>, "heizleistung": <W> }` (Datenblattwerte bei mehreren Außen- und Vorlauftemperaturen, zum Beispiel
-−10, −7, 2, 7 °C), `kleinsteLeistung` (W, Modulation) und `schallleistung` (dB(A)). Verglichen würde die Heizlastlinie aus dem Bereich „Ergebnis“
-(untere und obere Grenze bei −8 bis +12 °C) mit der Datenblatt-Heizleistung bei der nötigen Vorlauftemperatur. Dafür gibt es bisher keinen Code und keine Daten.
+Katalog der Wärmepumpen. Je Gerät: `id`, `hersteller`, `modell`, `typ` (genaue Typbezeichnung), `anbieter`, `preis` (`{ min, max }` in € oder `null`), `datenblatt` (Link als Text, die App ruft nichts ab),
+`notiz`, `schall` (Schallleistungspegel Außengerät in dB(A) oder `null`), `bafa` und `punkte`.
+
+`bafa`: `{ foerderfaehig: "ja" | "nein" | "unbekannt", nennleistung55 (kW, BAFA-Nennleistung bei 55 °C, nur für die Vorauswahl), eta35, eta55 (ETAs in %), kaeltemittel, stand (Datum JJJJ-MM-TT) }`.
+Die BAFA-Nennleistung ist kein Auslegungswert.
+
+`punkte`: Leistungspunkte aus dem Datenblatt, beliebig viele: `{ aussen (°C), vorlauf (°C), max (kW, maximale Heizleistung), min (kW, minimale Heizleistung, optional), cop (optional) }`.
+Pflicht für die Prüfung: `max` bei A−7 mit W35 und W55 sowie ein Punkt mit `min` bei A7 oder höher. Fehlt etwas, zeigt die App „nicht prüfbar“ und nennt, was fehlt.
+Dateien vor Version 4 haben diese Liste nicht: Beim Import bleibt der vorhandene Katalog dann unverändert. Enthält die Datei die Liste (auch leer), ersetzt sie den Katalog.
+
+### Katalogdatei
+
+Der Katalog lässt sich ohne Hausdaten als eigene Datei tauschen: `{ "format": "heizlast-waermepumpenkatalog", "schemaVersion": 4, "exportiertAm", "app", "daten": { "waermepumpen": [ … ] } }`.
+Export und Import stehen unter Grundlagen → Wärmepumpen. Beim Import wählst du „Zum Katalog hinzufügen“ (gleiche Kennungen werden überschrieben) oder „Katalog ersetzen“.
+Die Dateien lassen sich nicht verwechseln: Eine Katalogdatei lehnt der Sicherungs-Import ab und umgekehrt. Ein erfundenes Beispiel steht in `examples/beispiel-waermepumpen.json`.
+
+### Geräteprüfung (Bereich Ergebnis)
+
+Stufe A „Vorauswahl“ (nur BAFA-Werte): Verhältnis aus BAFA-Nennleistung 55 °C und oberer Grenze der Gebäudeheizlast. Grün 0,9 bis 1,3, gelb 0,75 bis 0,9 und 1,3 bis 1,6, sonst rot.
+Die BAFA-Nennleistung bezieht sich auf eine Auslegung bei −10 °C (EU-Durchschnittsklima), die Vorauswahl ist keine Auslegung.
+Stufe B „Prüfung“ (mit Datenblattpunkten, ersetzt die Vorauswahl): maximale Leistung bei θ_e und nötigem Vorlauf Y linear zwischen den Punkten (höchstens 3 K Fortsetzung darüber hinaus),
+Deckung gegen die obere Grenze (grün ab 100 %, gelb ab 85 %), Bivalenzpunkt gegen die Heizlastlinie der oberen Grenze (grün ohne Heizstab bis θ_e, gelb bis −5 °C, sonst rot),
+Taktprüfung (minimale Leistung gegen die untere Grenze der Heizlast: grün bis +7 °C, gelb bis +2 °C, sonst rot), Effizienz (ETAs linear bei Y) und Schall (nur Vergleich untereinander).
+Die Schwellen für Deckung und Bivalenzpunkt sind Annahmen der App. Es gibt keine Gesamtnote.
 
 ## Vorbereitet für spätere Stufen
 
-Die Stufen 1 bis 3 sind umgesetzt. Neue Felder bleiben abwärtskompatibel: Alte Dateien lassen sich weiter lesen.
+Die Stufen 1 bis 3 und der Wärmepumpen-Katalog sind umgesetzt. Neue Felder bleiben abwärtskompatibel: Alte Dateien lassen sich weiter lesen.

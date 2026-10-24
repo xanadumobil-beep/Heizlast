@@ -25,6 +25,7 @@ export const SEITEN = [
   { id: 'bauteile', bereich: 'grundlagen', titel: 'Bauteile' },
   { id: 'oeffnungen', bereich: 'grundlagen', titel: 'Öffnungen' },
   { id: 'zonen', bereich: 'grundlagen', titel: 'Zonen' },
+  { id: 'waermepumpen', bereich: 'grundlagen', titel: 'Wärmepumpen' },
   { id: 'rechenannahmen', bereich: 'grundlagen', titel: 'Rechenannahmen' },
   { id: 'sicherung', bereich: 'system', titel: 'Sicherung' },
   { id: 'app', bereich: 'system', titel: 'App' },
