@@ -76,6 +76,7 @@ Passiv mitbeheizte Räume sind keine Zonen, sondern Räume mit Status `passiv`.
 | `volumenManuell` | `null` (dann Fläche × Höhe) oder ein Volumen in m³ |
 | `luftwechsel` | `null` (Standard gilt) oder `{ "min", "max" }` in 1/h |
 | `waermeLieferanten` | nur bei `passiv`: `[ { "raumId": "...", "prozent": 60 }, ... ]`. Die Summe muss **100** ergeben. So wird der Netto-Verlust des passiven Raums den liefernden beheizten Räumen zugerechnet. |
+| `plan` | optional: `null` oder `{ "x": 0 bis 100, "y": 0 bis 100 }`, Position des Raums im Plan. **Mittelpunkt des Kastens in Prozent der Breite und Höhe der Zeichenfläche seines Geschosses**, Ursprung links oben. Fehlt der Wert oder ist er ungültig, ordnet die App den Raum automatisch an. Die Prozentangabe gilt später auch relativ zu einem Hintergrundbild (fotografierter Bauplan) des Geschosses. |
 | `notiz` | freier Text |
 
 ## `daten.raumflaechen`
@@ -175,7 +176,7 @@ als fehlerhaft markiert.
 | `zonen` | `id`, `name`, `art`, `temperatur.min`, `temperatur.max` | `notiz` |
 | `bauteile` | `id`, `name`, `art`, `u.min`, `u.max` (größer 0), `quelle` | `aufbau` |
 | `oeffnungstypen` | `id`, `name`, `art`, `uw` (größer 0), `quelle` | |
-| `raeume` | `id`, `name`, `geschoss`, `status`, `theta` (bei `unbeheizt` darf `null` sein), `flaeche` und `hoehe` (oder `volumenManuell`), bei `passiv` die `waermeLieferanten` | `volumenManuell`, `luftwechsel`, `notiz` |
+| `raeume` | `id`, `name`, `geschoss`, `status`, `theta` (bei `unbeheizt` darf `null` sein), `flaeche` und `hoehe` (oder `volumenManuell`), bei `passiv` die `waermeLieferanten` | `volumenManuell`, `luftwechsel`, `plan`, `notiz` |
 | `raumflaechen` | `id`, `raumId`, `bauteilId`, `angrenzend`, `modus` und dazu passend `laenge` + `hoehe` oder `flaeche` | `name`, `notiz`, `oeffnungen` (Liste, darf leer sein) |
 | Öffnung | `id`, `typId`, `modus` und dazu passend `laenge` (Breite) + `hoehe` oder `flaeche`, `anzahl` (ganze Zahl ab 1) | `name` |
 | `heizkoerper` | `id`, `raumId`, `bauart`, `status`, `ventil`; außer bei `wp`: `normVorlauf`, `normRuecklauf`, `normRaum`; für die Berechnung außerdem die Leistung (`normleistung`, bei Gliedern auch `gliederzahl` mit `leistungJeGlied`; bei `wp` die `kennlinie` mit mindestens zwei Paaren und `kennlinieRaumtemperatur`) | Maße, `typ`, `material`, `exponent`, `notiz` |

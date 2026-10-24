@@ -4,6 +4,8 @@
 import { el, ersetzeKinder } from '../ui.js';
 import { ladeProjekt } from '../daten.js';
 import { baueBericht } from '../bericht.js';
+import { geometrie } from '../planlayout.js';
+import { zeichnePlan, legende } from '../planzeichnung.js';
 
 function tabelle(b) {
   const klasse = (i) => (b.ausrichtung[i] === 'r' ? 'r' : '');
@@ -28,6 +30,7 @@ function block(b) {
     case 'liste': return el('ul', { class: 'b-liste' }, b.eintraege.map((t) => el('li', {}, t)));
     case 'paare': return el('dl', { class: 'b-paare' }, b.zeilen.flatMap(([name, wert]) => [el('dt', {}, name), el('dd', {}, wert)]));
     case 'tabelle': return tabelle(b);
+    case 'plan': return el('div', { class: 'b-plan' }, zeichnePlan(geometrie(b.plan)), legende());
     default: throw new Error(`Unbekannter Blocktyp: ${b.art}`);
   }
 }

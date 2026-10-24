@@ -14,6 +14,10 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
 - **Heizlast je Raum und für das Gebäude** bei der Normaußentemperatur, als Bandbreite, mit Gegenprobe der
   Gebäudesumme gegen die Raumsummen.
 - **Passive Räume** (zum Beispiel ein Flur ohne Heizkörper): ihr Verlust wird prozentual auf die liefernden Räume verteilt.
+- **Plan:** automatisch erzeugtes Schema der Räume je Geschoss mit Außenluft, Zonen und allen Wänden als Linien
+  (Farbe nach Gegenseite, Stärke nach Fläche, Pfeil für Raum-zu-Raum-Verluste, gestrichelt für passive Räume).
+  Kästen lassen sich per Finger verschieben, die Positionen stehen in der Sicherungsdatei. Auffälligkeiten und eine
+  Vollständigkeitsprüfung je Raum stehen direkt im Plan und im Bericht.
 - **Heizkörper und Vorlauftemperatur:** Leistung nach Norm-Bedingungen, Wärmepumpen-Kennlinien, nötige Vorlauftemperatur
   je Haus und je Raum, bestimmender Raum.
 - **Verbrauchsabgleich:** Gasverbrauch und Holz in eine Heizlast umgerechnet, mit zwei Innentemperaturen
@@ -123,6 +127,7 @@ Aufbau:
 ```
 index.html, manifest.webmanifest, sw.js, icons/
 css/              style.css, print.css (A4-Druck)
+js/plan.js, planlayout.js, planzeichnung.js   Plan: Modell und Prüfungen, Geometrie, SVG
 js/engine/        Rechenkern (reine Funktionen, ohne Browser): Heizlast, Heizkörper, Vorlauf, Verbrauch, Format
 js/               Datenmodell, Validierung, IndexedDB, Import/Export, Bericht
 js/views/         Ansichten (Räume, Vorlauf, Verbrauch, Bericht, Kataloge, Sicherung, Einstellungen)

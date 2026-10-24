@@ -10,11 +10,13 @@ import { renderVorlauf } from './views/vorlauf.js';
 import { renderVerbrauch, renderVerbrauchListe } from './views/verbrauch.js';
 import { renderSicherung } from './views/sicherung.js';
 import { renderBericht } from './views/bericht.js';
+import { renderPlan } from './views/plan.js';
 import { aktualisiereBanner } from './banner.js';
 
 // render(container, neuLaden, parameter): parameter ist der Teil nach dem Schrägstrich im Link.
 const TABS = [
   { id: 'raeume', titel: 'Räume', render: (c, neu, id) => (id ? renderRaum(c, id, neu) : renderRaeume(c, neu)) },
+  { id: 'plan', titel: 'Plan', render: (c) => renderPlan(c) },
   { id: 'vorlauf', titel: 'Vorlauf', render: (c) => renderVorlauf(c) },
   { id: 'verbrauch', titel: 'Verbrauch', render: (c, neu, id) => (id ? renderVerbrauch(c, id, neu) : renderVerbrauchListe(c, neu)) },
   { id: 'bericht', titel: 'Bericht', render: (c) => renderBericht(c) },

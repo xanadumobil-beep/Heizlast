@@ -11,6 +11,7 @@ import { annahmen as verbrauchAnnahmen, FREMDWAERME_HINWEIS, HS_HINWEIS } from '
 import { rechne, bewerteVorlauf } from './daten.js';
 import { raumVolumen, nettoFlaeche, flaecheAusMassen, oeffnungsGesamtflaeche } from './modell.js';
 import { datumText, inhaltsHinweise } from './io.js';
+import { baueplan, pruefZeilen } from './plan.js';
 import {
   watt, wattBereich, wattBereichVon, mitVorzeichen, raumName, flaechenBezeichnung, angrenzendText, massText,
   meldungsTexte, berechneteBandbreite, auswerten, abweichungsText, FEHLER_TEXT, vorlaufText, hinweisText,
@@ -252,6 +253,28 @@ function flaechenAnlage(ctx) {
   return bloecke;
 }
 
+// Plan der Raumbeziehungen, Auffälligkeiten und Vollständigkeitsprüfung auf einer eigenen Seite.
+function planAbschnitt(ctx) {
+  const { projekt, ergebnis } = ctx;
+  const plan = baueplan(projekt, ergebnis);
+  const bloecke = [
+    text('Schema der Räume (Kästen nach Geschoss) mit ihren Nachbarn. Je Raumfläche eine Linie, die Stärke folgt der Fläche. '
+      + 'Ein Pfeil zeigt, in welche Richtung der Wärmeverlust zwischen zwei beheizten Räumen angerechnet wird. '
+      + 'Gestrichelte Linien zeigen die Wärmelieferanten passiver Räume mit ihrem Anteil.'),
+    { art: 'plan', plan },
+    zwischentitel('Auffälligkeiten'),
+  ];
+  const raumNameVon = (id) => raumName(projekt, id);
+  bloecke.push(plan.auffaelligkeiten.length === 0
+    ? text('Keine Auffälligkeiten.')
+    : liste(plan.auffaelligkeiten.map((a) => `„${raumNameVon(a.raumId)}“: ${a.text}`)));
+  bloecke.push(
+    zwischentitel('Vollständigkeit je Raum (✓ in Ordnung, ⚠ prüfen, ✗ fehlt)'),
+    tabelle(['Raum', 'Prüfung', 'Ergebnis', 'Begründung'], pruefZeilen(plan.pruefung), 'llll'),
+  );
+  return bloecke;
+}
+
 function heizkoerperAbschnitt(projekt) {
   if (projekt.heizkoerper.length === 0) return [text('Keine Heizkörper erfasst.')];
   const sortiert = [...projekt.heizkoerper].sort((a, b) => raumName(projekt, a.raumId).localeCompare(raumName(projekt, b.raumId), 'de'));
@@ -367,6 +390,7 @@ export function baueBericht(projekt, jetzt = new Date()) {
     ...(hatErgebnis ? [{ titel: 'Vorlauftemperaturen', bloecke: vorlaufAbschnitt(ctx) }] : []),
     { titel: 'Verbrauchsabgleich', bloecke: verbrauchAbschnitt(ctx) },
     { titel: 'Hinweise und Datenqualität', bloecke: hinweiseAbschnitt(ctx) },
+    ...(projekt.raeume.length > 0 ? [{ titel: 'Plan und Vollständigkeit', neueSeite: true, bloecke: planAbschnitt(ctx) }] : []),
     ...(hatErgebnis ? [{ titel: 'Anlage: Raumflächen und Verluste', neueSeite: true, bloecke: flaechenAnlage(ctx) }] : []),
   ].map((a, i) => ({ ...a, titel: `${i + 1} ${a.titel}` }));
 

@@ -13,6 +13,20 @@
   --fehler-bg: #fde8e6;
   --radius: 12px;
   --ziel: 48px;
+  --pl-boden: #ebe9e2;
+  --pl-beheizt: #fde3c4;
+  --pl-beheizt-rand: #d97a1c;
+  --pl-passiv: #fff2a8;
+  --pl-passiv-rand: #b8960a;
+  --pl-unbeheizt: #dde6ee;
+  --pl-unbeheizt-rand: #6e8294;
+  --pl-aussen: #2f7fd0;
+  --pl-erdreich: #8b5a2b;
+  --pl-nachbar: #8e44ad;
+  --pl-unbeh-zone: #4f8a8b;
+  --pl-raum: #2e8b57;
+  --pl-passivlinie: #d98a00;
+  --pl-warn: #d32f2f;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +43,20 @@
     --warnung-bg: #3a2f10;
     --fehler: #ff8a80;
     --fehler-bg: #3d1a17;
+    --pl-boden: #262624;
+    --pl-beheizt: #5a3b1c;
+    --pl-beheizt-rand: #e8923a;
+    --pl-passiv: #5a5018;
+    --pl-passiv-rand: #d9bb2a;
+    --pl-unbeheizt: #2f3a44;
+    --pl-unbeheizt-rand: #8ea3b5;
+    --pl-aussen: #5ea6f0;
+    --pl-erdreich: #c98b50;
+    --pl-nachbar: #c28be0;
+    --pl-unbeh-zone: #78b9ba;
+    --pl-raum: #5fc98a;
+    --pl-passivlinie: #f0b43c;
+    --pl-warn: #ff6b60;
   }
 }
 
@@ -356,3 +384,69 @@ details.hilfe li { margin-bottom: 6px; }
   .b-paare { grid-template-columns: 1fr; gap: 0; }
   .b-paare dd { margin-bottom: 8px; }
 }
+
+
+/* --- Plan ------------------------------------------------------------------------------ */
+.plan-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.plan-svg text { font-family: -apple-system, system-ui, sans-serif; fill: var(--text); }
+.pl-boden { fill: var(--pl-boden); stroke: var(--linie); stroke-width: 1.5; }
+.pl-bodenname { font-size: 20px; font-weight: 700; fill: var(--text-leise) !important; }
+.pl-strich { fill: none; stroke: var(--text-leise); opacity: 0.9; }
+.pl-linie.l-aussen .pl-strich, .pl-linie.l-aussen .pl-pfeil { stroke: var(--pl-aussen); }
+.pl-linie.l-erdreich .pl-strich { stroke: var(--pl-erdreich); }
+.pl-linie.l-nachbar .pl-strich { stroke: var(--pl-nachbar); }
+.pl-linie.l-unbeheizt .pl-strich { stroke: var(--pl-unbeh-zone); }
+.pl-linie.l-raum .pl-strich { stroke: var(--pl-raum); }
+.pl-halo { fill: none; stroke: var(--pl-warn); opacity: 0.35; stroke-linecap: round; }
+.pl-linie.gewaehlt .pl-halo { stroke: var(--akzent); opacity: 0.45; }
+.pl-treffer { stroke: transparent; fill: none; cursor: pointer; pointer-events: stroke; }
+.pl-pfeil { fill: var(--pl-raum); stroke: var(--flaeche); stroke-width: 2; stroke-linejoin: round; }
+.pl-passiv { stroke: var(--pl-passivlinie); stroke-width: 4; stroke-dasharray: 12 8; fill: none; }
+.pl-etikett { fill: var(--flaeche); stroke: var(--pl-passivlinie); stroke-width: 1.5; }
+.pl-prozent { font-size: 15px; font-weight: 700; }
+.pl-symbolflaeche { fill: var(--flaeche); stroke-width: 3; }
+.pl-symbol.s-aussen .pl-symbolflaeche { stroke: var(--pl-aussen); }
+.pl-symbol.s-erdreich .pl-symbolflaeche { stroke: var(--pl-erdreich); }
+.pl-symbol.s-nachbar .pl-symbolflaeche { stroke: var(--pl-nachbar); }
+.pl-symbol.s-unbeheizt .pl-symbolflaeche { stroke: var(--pl-unbeh-zone); }
+.pl-symboltext { font-size: 16px; font-weight: 700; }
+.pl-symbolnebentext { font-size: 14px; fill: var(--text-leise) !important; }
+.pl-kastenflaeche { stroke-width: 2.5; }
+.pl-kasten.beheizt .pl-kastenflaeche { fill: var(--pl-beheizt); stroke: var(--pl-beheizt-rand); }
+.pl-kasten.passiv .pl-kastenflaeche { fill: var(--pl-passiv); stroke: var(--pl-passiv-rand); stroke-dasharray: 7 4; }
+.pl-kasten.unbeheizt .pl-kastenflaeche { fill: var(--pl-unbeheizt); stroke: var(--pl-unbeheizt-rand); }
+.pl-kasten.auffaellig .pl-kastenflaeche { stroke: var(--pl-warn); stroke-width: 4.5; stroke-dasharray: none; }
+.pl-kasten { cursor: pointer; }
+.pl-kasten:focus { outline: none; }
+.pl-kasten:focus .pl-kastenflaeche { stroke: var(--akzent); stroke-width: 4.5; }
+.pl-kastenname { font-size: 17px; font-weight: 700; }
+.pl-kastentext { font-size: 15px; }
+.pl-kastenstatus { font-size: 13px; fill: var(--text-leise) !important; }
+.pl-pruefzeichen { font-size: 18px; font-weight: 800; }
+.pl-pruefzeichen.z-ok { fill: var(--ok) !important; }
+.pl-pruefzeichen.z-warnung { fill: var(--warnung) !important; }
+.pl-pruefzeichen.z-fehler { fill: var(--fehler) !important; }
+.pl-warnkreis { fill: var(--pl-warn); stroke: var(--flaeche); stroke-width: 2; }
+.plan-svg .pl-warnzeichen { fill: #fff; font-size: 16px; font-weight: 800; }
+.plan-anordnen .pl-kasten { cursor: grab; }
+.plan-bedienung { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+.plan-bedienung button[aria-pressed="true"] { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); font-weight: 600; }
+.plan-detail { margin: 12px 0; }
+.plan-detail h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.plan-legende ul { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.plan-legende li { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.legende-probe { display: inline-block; width: 26px; height: 0; border-top: 5px solid var(--text-leise); }
+.legende-probe.l-aussen { border-color: var(--pl-aussen); }
+.legende-probe.l-erdreich { border-color: var(--pl-erdreich); }
+.legende-probe.l-nachbar { border-color: var(--pl-nachbar); }
+.legende-probe.l-unbeheizt { border-color: var(--pl-unbeh-zone); }
+.legende-probe.l-raum { border-color: var(--pl-raum); }
+.legende-probe.lp-passiv { border-top: 4px dashed var(--pl-passivlinie); }
+.legende-probe.lp-kasten { height: 16px; border: 2px solid; border-radius: 4px; width: 26px; }
+.legende-probe.lp-kasten.beheizt { background: var(--pl-beheizt); border-color: var(--pl-beheizt-rand); }
+.legende-probe.lp-kasten.passiv { background: var(--pl-passiv); border-color: var(--pl-passiv-rand); border-style: dashed; }
+.legende-probe.lp-kasten.unbeheizt { background: var(--pl-unbeheizt); border-color: var(--pl-unbeheizt-rand); }
+.pruef-ok { color: var(--ok); font-weight: 700; }
+.pruef-warnung { color: var(--warnung); font-weight: 700; }
+.pruef-fehler { color: var(--fehler); font-weight: 700; }
+.pruef-tabelle td, .pruef-tabelle th { vertical-align: top; }
