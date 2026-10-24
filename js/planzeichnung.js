@@ -55,7 +55,7 @@ export function zeichnePlan(geom, optionen = {}) {
 
   for (const l of geom.linien) {
     const auswahl = l.id === ausgewaehlteLinie;
-    const gruppe = s('g', { class: `pl-linie l-${l.farbe}${l.markiert ? ' markiert' : ''}${auswahl ? ' gewaehlt' : ''}`, 'data-linie': l.id });
+    const gruppe = s('g', { class: `pl-linie l-${l.farbe}${l.art === 'bezug' ? ' bezug' : ''}${l.markiert ? ' markiert' : ''}${auswahl ? ' gewaehlt' : ''}`, 'data-linie': l.id, 'data-flaechen': l.flaechenIds.join(',') });
     if (l.markiert || auswahl) {
       gruppe.append(s('line', { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, class: 'pl-halo', 'stroke-width': l.breite + 8 }));
     }
@@ -64,7 +64,7 @@ export function zeichnePlan(geom, optionen = {}) {
     if (l.pfeil) gruppe.append(s('polygon', { points: l.pfeil, class: 'pl-pfeil' }));
     if (l.markiert) {
       gruppe.append(
-        s('circle', { cx: l.mitte.x, cy: l.mitte.y - (l.pfeil ? 20 : 0), r: 11, class: 'pl-warnkreis' }),
+        s('circle', { cx: l.mitte.x, cy: l.mitte.y - (l.pfeil ? 20 : 0), r: 10, class: 'pl-warnkreis' }),
         s('text', { x: l.mitte.x, y: l.mitte.y - (l.pfeil ? 20 : 0) + 5, class: 'pl-warnzeichen', 'text-anchor': 'middle' }, '!'),
       );
     }
@@ -73,7 +73,7 @@ export function zeichnePlan(geom, optionen = {}) {
 
   for (const sy of geom.symbole) {
     svg.append(s(
-      'g', { class: `pl-symbol s-${sy.art}`, 'data-symbol': sy.id },
+      'g', { class: `pl-symbol s-${sy.art}${sy.gewaehlt ? ' gewaehlt' : ''}`, 'data-symbol': sy.id },
       s('rect', { x: sy.x, y: sy.y, width: sy.b, height: sy.h, rx: sy.art === 'aussen' ? 28 : 10, class: 'pl-symbolflaeche' }),
       s('text', { x: sy.cx, y: sy.cy - 4, class: 'pl-symboltext', 'text-anchor': 'middle' }, kuerze(sy.name, 20)),
       s('text', { x: sy.cx, y: sy.cy + 15, class: 'pl-symbolnebentext', 'text-anchor': 'middle' }, sy.temperatur),
@@ -82,20 +82,28 @@ export function zeichnePlan(geom, optionen = {}) {
 
   for (const k of geom.kaesten) {
     const gruppe = s(
-      'g', { class: `pl-kasten ${k.status}${k.auffaellig ? ' auffaellig' : ''}`, 'data-raum': k.id, tabindex: interaktiv ? 0 : null },
+      'g', { class: `pl-kasten ${k.status}${k.auffaellig ? ' auffaellig' : ''}${k.gewaehlt ? ' gewaehlt' : ''}`, 'data-raum': k.id, tabindex: interaktiv ? 0 : null },
       s('title', {}, `${k.name}: ${k.auffaelligkeiten.length > 0 ? k.auffaelligkeiten.join(' ') : 'keine Auffälligkeiten'}`),
       s('rect', { x: k.x, y: k.y, width: k.b, height: k.h, rx: 10, class: 'pl-kastenflaeche' }),
-      s('text', { x: k.x + 10, y: k.y + 25, class: 'pl-kastenname' }, kuerze(k.name, 16)),
-      s('text', { x: k.x + 10, y: k.y + 46, class: 'pl-kastentext' }, `${typeof k.theta === 'number' ? zahlZuText(k.theta) : '?'} °C · ${typeof k.flaeche === 'number' ? formatZahl(k.flaeche, 1) : '?'} m²`),
-      s('text', { x: k.x + 10, y: k.y + 65, class: 'pl-kastenstatus' }, k.statusText),
+      s('text', { x: k.x + 10, y: k.y + 24, class: 'pl-kastenname' }, kuerze(k.name, 18)),
+      s('text', { x: k.x + 10, y: k.y + 45, class: 'pl-kastentext' }, `${typeof k.theta === 'number' ? zahlZuText(k.theta) : '?'} °C · ${typeof k.flaeche === 'number' ? formatZahl(k.flaeche, 1) : '?'} m²`),
+      s('text', { x: k.x + 10, y: k.y + 63, class: 'pl-kastenstatus' }, k.statusText),
     );
     if (k.symbol) {
-      gruppe.append(s('text', { x: k.x + k.b - 10, y: k.y + 26, class: `pl-pruefzeichen z-${k.symbol}`, 'text-anchor': 'end' }, ZEICHEN[k.symbol]));
+      gruppe.append(s('text', { x: k.x + k.b - 10, y: k.y + 65, class: `pl-pruefzeichen z-${k.symbol}`, 'text-anchor': 'end' }, ZEICHEN[k.symbol]));
     }
+    // Marken: Fläche in m² je Art der Gegenseite (Außenluft, Nachbar, unbeheizte Zone, Erdreich).
+    k.marken.forEach((m, i) => {
+      const x = k.x + 8 + i * 42;
+      gruppe.append(
+        s('rect', { x, y: k.y + k.h - 28, width: 38, height: 20, rx: 5, class: `pl-marke m-${m.farbe}${m.markiert ? ' markiert' : ''}` }),
+        s('text', { x: x + 19, y: k.y + k.h - 13, class: 'pl-markentext', 'text-anchor': 'middle' }, m.flaeche > 0 ? formatZahl(m.flaeche, 0) : '?'),
+      );
+    });
     if (k.auffaellig) {
       gruppe.append(
-        s('circle', { cx: k.x + k.b - 14, cy: k.y + k.h - 16, r: 11, class: 'pl-warnkreis' }),
-        s('text', { x: k.x + k.b - 14, y: k.y + k.h - 11, class: 'pl-warnzeichen', 'text-anchor': 'middle' }, '!'),
+        s('circle', { cx: k.x + k.b - 3, cy: k.y + 3, r: 11, class: 'pl-warnkreis' }),
+        s('text', { x: k.x + k.b - 3, y: k.y + 8, class: 'pl-warnzeichen', 'text-anchor': 'middle' }, '!'),
       );
     }
     svg.append(gruppe);
@@ -112,7 +120,8 @@ export function legende() {
     el('ul', {}, probe('lp-kasten beheizt', 'Beheizt'), probe('lp-kasten passiv', 'Passiv mitbeheizt'), probe('lp-kasten unbeheizt', 'Unbeheizt (nicht gerechnet)')),
     el(
       'p', { class: 'klein' },
-      'Linienstärke: je größer die Fläche, desto dicker. Pfeil: Richtung, in die der Wärmeverlust angerechnet wird (vom wärmeren zum kälteren Raum). '
+      'Farbige Marken im Kasten: Fläche in m² an Außenluft, Nachbar, unbeheizter Zone oder Erdreich (Farben wie die Linien). '
+      + 'Linienstärke: je größer die Fläche, desto dicker. Pfeil: Richtung, in die der Wärmeverlust angerechnet wird (vom wärmeren zum kälteren Raum). '
       + 'Rot umrandet oder mit „!“: Auffälligkeit. ✓ ⚠ ✗ im Kasten: Vollständigkeitsprüfung.',
     ),
   );

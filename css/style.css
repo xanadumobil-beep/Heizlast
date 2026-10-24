@@ -27,6 +27,7 @@
   --pl-raum: #2e8b57;
   --pl-passivlinie: #d98a00;
   --pl-warn: #d32f2f;
+  --pl-markentext: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -57,6 +58,7 @@
     --pl-raum: #5fc98a;
     --pl-passivlinie: #f0b43c;
     --pl-warn: #ff6b60;
+    --pl-markentext: #101010;
   }
 }
 
@@ -415,10 +417,21 @@ details.hilfe li { margin-bottom: 6px; }
 .pl-kasten.beheizt .pl-kastenflaeche { fill: var(--pl-beheizt); stroke: var(--pl-beheizt-rand); }
 .pl-kasten.passiv .pl-kastenflaeche { fill: var(--pl-passiv); stroke: var(--pl-passiv-rand); stroke-dasharray: 7 4; }
 .pl-kasten.unbeheizt .pl-kastenflaeche { fill: var(--pl-unbeheizt); stroke: var(--pl-unbeheizt-rand); }
-.pl-kasten.auffaellig .pl-kastenflaeche { stroke: var(--pl-warn); stroke-width: 4.5; stroke-dasharray: none; }
+.pl-kasten.auffaellig .pl-kastenflaeche { stroke: var(--pl-warn); stroke-width: 3.5; stroke-dasharray: none; }
 .pl-kasten { cursor: pointer; }
 .pl-kasten:focus { outline: none; }
 .pl-kasten:focus .pl-kastenflaeche { stroke: var(--akzent); stroke-width: 4.5; }
+.pl-marke { stroke: none; }
+.pl-marke.m-aussen { fill: var(--pl-aussen); }
+.pl-marke.m-erdreich { fill: var(--pl-erdreich); }
+.pl-marke.m-nachbar { fill: var(--pl-nachbar); }
+.pl-marke.m-unbeheizt { fill: var(--pl-unbeh-zone); }
+.pl-marke.markiert { stroke: var(--pl-warn); stroke-width: 3; }
+.plan-svg .pl-markentext { font-size: 13px; font-weight: 700; fill: var(--pl-markentext); }
+.pl-kasten.gewaehlt .pl-kastenflaeche { stroke: var(--akzent); stroke-width: 5.5; }
+.pl-symbol { cursor: pointer; }
+.pl-symbol.gewaehlt .pl-symbolflaeche { stroke-width: 6; }
+.pl-linie.bezug .pl-strich { opacity: 0.8; }
 .pl-kastenname { font-size: 17px; font-weight: 700; }
 .pl-kastentext { font-size: 15px; }
 .pl-kastenstatus { font-size: 13px; fill: var(--text-leise) !important; }

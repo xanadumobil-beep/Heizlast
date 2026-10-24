@@ -258,9 +258,10 @@ function planAbschnitt(ctx) {
   const { projekt, ergebnis } = ctx;
   const plan = baueplan(projekt, ergebnis);
   const bloecke = [
-    text('Schema der Räume (Kästen nach Geschoss) mit ihren Nachbarn. Je Raumfläche eine Linie, die Stärke folgt der Fläche. '
+    text('Schema der Räume (Kästen nach Geschoss). Zwischen den Räumen laufen die Wände, die Stärke folgt der Fläche. '
       + 'Ein Pfeil zeigt, in welche Richtung der Wärmeverlust zwischen zwei beheizten Räumen angerechnet wird. '
-      + 'Gestrichelte Linien zeigen die Wärmelieferanten passiver Räume mit ihrem Anteil.'),
+      + 'Gestrichelte Linien zeigen die Wärmelieferanten passiver Räume mit ihrem Anteil. '
+      + 'Die farbigen Marken im Kasten nennen die Fläche in m² an Außenluft, Nachbar, unbeheizter Zone und Erdreich.'),
     { art: 'plan', plan },
     zwischentitel('Auffälligkeiten'),
   ];

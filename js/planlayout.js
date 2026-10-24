@@ -6,9 +6,9 @@
 
 export const BREITE = 1000;
 export const FLAECHE_B = 780;
-export const FLAECHE_H = 330;
-export const KASTEN_B = 150;
-export const KASTEN_H = 78;
+export const FLAECHE_H = 520;
+export const KASTEN_B = 176;
+export const KASTEN_H = 104;
 export const SYMBOL_X = 830;
 export const SYMBOL_B = 160;
 export const SYMBOL_H = 56;
@@ -39,7 +39,7 @@ export function klemmePosition({ x, y }) {
 // ersten freien Platz, der keinen schon gesetzten Kasten überdeckt.
 export function rasterPlaetze(anzahl) {
   const n = Math.max(anzahl, 1);
-  const spalten = n <= 2 ? n : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  const spalten = n <= 2 ? n : n <= 12 ? 3 : 4;
   const zeilen = Math.ceil(n / spalten);
   const plaetze = [];
   for (let i = 0; i < n; i += 1) {
@@ -81,8 +81,14 @@ export function positionenFuerGeschoss(kaesten) {
     belegt.push(p);
   }
   const plaetze = rasterPlaetze(kaesten.length);
+  const einheiten = (p) => ({ x: (p.x / 100) * FLAECHE_B, y: (p.y / 100) * FLAECHE_H });
   for (const k of ordneNachVerbindung(kaesten.filter((x) => !x.position))) {
-    const platz = plaetze.find((p) => !belegt.some((b) => ueberlappt(p, b))) ?? plaetze[plaetze.length - 1];
+    const frei = plaetze.filter((p) => !belegt.some((b) => ueberlappt(p, b)));
+    const kandidaten = frei.length > 0 ? frei : [plaetze[plaetze.length - 1]];
+    // Der freie Platz mit der geringsten Entfernung zu den schon gesetzten verbundenen Räumen, sonst der erste.
+    const partner = (k.verbunden ?? []).map((id) => ergebnis.get(id)).filter(Boolean).map(einheiten);
+    const kosten = (p) => partner.reduce((summe, q) => summe + Math.hypot(einheiten(p).x - q.x, einheiten(p).y - q.y), 0);
+    const platz = partner.length === 0 ? kandidaten[0] : kandidaten.reduce((beste, p) => (kosten(p) < kosten(beste) ? p : beste));
     ergebnis.set(k.id, { ...platz, gespeichert: false });
     belegt.push(platz);
   }
@@ -117,10 +123,30 @@ export function linienBreite(flaeche) {
   return runde(Math.min(12, 1.5 + 1.3 * Math.sqrt(flaeche)));
 }
 
-// Koordinaten für den Plan. plan: Ergebnis von baueplan(). Rückgabe: { breite, hoehe, boeden, kaesten, symbole, linien, passivLinien }
-export function geometrie(plan) {
+// Reihenfolge der Marken im Kasten.
+const MARKEN_REIHENFOLGE = ['aussen', 'nachbar', 'unbeheizt', 'erdreich'];
+
+// Koordinaten für den Plan. plan: Ergebnis von baueplan().
+// optionen: { auswahlRaum, auswahlSymbol, bezuege: 'marken' | 'alle' }
+//   Wände zwischen Räumen und Linien passiver Räume stehen immer im Plan. Die Bezüge zu Außenluft und Zonen sind
+//   als Marken im Kasten zusammengefasst. Als Linie (je Raum und Gegenseite eine, Fläche summiert) erscheinen sie nur
+//   für den gewählten Raum, das gewählte Symbol oder bei bezuege 'alle'.
+// Rückgabe: { breite, hoehe, boeden, kaesten, symbole, linien, passivLinien }
+export function geometrie(plan, optionen = {}) {
+  const { auswahlRaum = null, auswahlSymbol = null, bezuege = 'marken' } = optionen;
   const boeden = plan.geschosse.map((g, i) => ({ name: g.name, x: 0, y: RAND_OBEN + i * (FLAECHE_H + ABSTAND), b: FLAECHE_B, h: FLAECHE_H }));
   const hoehe = Math.max(RAND_OBEN + boeden.length * (FLAECHE_H + ABSTAND) - ABSTAND + 10, SYMBOL_H * plan.symbole.length + 20);
+
+  // Marken: je Raum die Flächen nach Art der Gegenseite zusammengezählt.
+  const marken = new Map();
+  for (const l of plan.linien.filter((x) => x.zielArt !== 'raum')) {
+    if (!marken.has(l.raumId)) marken.set(l.raumId, new Map());
+    const je = marken.get(l.raumId);
+    const eintrag = je.get(l.farbe) ?? { farbe: l.farbe, flaeche: 0, markiert: false };
+    eintrag.flaeche += l.flaeche ?? 0;
+    eintrag.markiert = eintrag.markiert || l.marker.length > 0;
+    je.set(l.farbe, eintrag);
+  }
 
   const kaesten = [];
   plan.geschosse.forEach((g, i) => {
@@ -130,24 +156,49 @@ export function geometrie(plan) {
       const pos = positionen.get(k.id);
       const cx = boden.x + (pos.x / 100) * boden.b;
       const cy = boden.y + (pos.y / 100) * boden.h;
-      kaesten.push({ ...k, cx, cy, x: cx - KASTEN_B / 2, y: cy - KASTEN_H / 2, b: KASTEN_B, h: KASTEN_H, boden: i, prozent: { x: pos.x, y: pos.y }, gespeichert: pos.gespeichert });
+      const chips = MARKEN_REIHENFOLGE.map((f) => marken.get(k.id)?.get(f)).filter(Boolean);
+      kaesten.push({
+        ...k, cx, cy, x: cx - KASTEN_B / 2, y: cy - KASTEN_H / 2, b: KASTEN_B, h: KASTEN_H, boden: i,
+        prozent: { x: pos.x, y: pos.y }, gespeichert: pos.gespeichert, marken: chips, gewaehlt: k.id === auswahlRaum,
+      });
     }
   });
 
   const schritt = (hoehe - 20) / plan.symbole.length;
   const symbole = plan.symbole.map((s, i) => {
     const y = 10 + i * schritt + (schritt - SYMBOL_H) / 2;
-    return { ...s, x: SYMBOL_X, y, b: SYMBOL_B, h: SYMBOL_H, cx: SYMBOL_X + SYMBOL_B / 2, cy: y + SYMBOL_H / 2 };
+    return { ...s, x: SYMBOL_X, y, b: SYMBOL_B, h: SYMBOL_H, cx: SYMBOL_X + SYMBOL_B / 2, cy: y + SYMBOL_H / 2, gewaehlt: s.id === auswahlSymbol };
   });
 
   const ziele = new Map([...kaesten, ...symbole].map((t) => [t.id, t]));
 
-  // Linien zwischen demselben Paar werden parallel versetzt, damit sie nicht übereinanderliegen.
-  const gruppen = new Map();
+  // Zu zeichnende Einträge: Wände einzeln, Außenbezüge gebündelt (und nur bei Bedarf).
+  const eintraege = [];
+  const buendel = new Map();
   for (const l of plan.linien) {
-    const schluessel = [l.raumId, l.zielId].sort().join('|');
+    if (l.zielArt === 'raum') {
+      eintraege.push({ art: 'wand', id: l.id, raumId: l.raumId, zielId: l.zielId, farbe: l.farbe, flaeche: l.netto ?? l.flaeche, flaechenIds: [l.id], markiert: l.marker.length > 0, pfeil: l.pfeil });
+      continue;
+    }
+    const sichtbar = bezuege === 'alle' || l.raumId === auswahlRaum || l.zielId === auswahlSymbol;
+    if (!sichtbar) continue;
+    const schluessel = `${l.raumId}|${l.zielId}`;
+    if (!buendel.has(schluessel)) {
+      buendel.set(schluessel, { art: 'bezug', id: `b-${schluessel}`, raumId: l.raumId, zielId: l.zielId, farbe: l.farbe, flaeche: 0, flaechenIds: [], markiert: false, pfeil: null });
+      eintraege.push(buendel.get(schluessel));
+    }
+    const b = buendel.get(schluessel);
+    b.flaeche += l.netto ?? l.flaeche ?? 0;
+    b.flaechenIds.push(l.id);
+    b.markiert = b.markiert || l.marker.length > 0;
+  }
+
+  // Wände zwischen demselben Raumpaar werden parallel versetzt, damit sie nicht übereinanderliegen.
+  const gruppen = new Map();
+  for (const e of eintraege) {
+    const schluessel = [e.raumId, e.zielId].sort().join('|');
     if (!gruppen.has(schluessel)) gruppen.set(schluessel, []);
-    gruppen.get(schluessel).push(l);
+    gruppen.get(schluessel).push(e);
   }
 
   const linien = [];
@@ -174,9 +225,9 @@ export function geometrie(plan) {
         pfeil = pfeilPunkte(mitte, richtung);
       }
       linien.push({
-        id: l.id, raumId: l.raumId, zielId: l.zielId, farbe: l.farbe, breite: linienBreite(l.netto ?? l.flaeche),
+        id: l.id, art: l.art, raumId: l.raumId, zielId: l.zielId, farbe: l.farbe, flaechenIds: l.flaechenIds, breite: linienBreite(l.flaeche),
         x1: runde(start.x), y1: runde(start.y), x2: runde(ende.x), y2: runde(ende.y), mitte: { x: runde(mitte.x), y: runde(mitte.y) },
-        pfeil, markiert: l.marker.length > 0,
+        pfeil, markiert: l.markiert,
       });
     });
   }

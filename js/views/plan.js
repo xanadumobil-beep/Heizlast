@@ -4,7 +4,7 @@
 import * as db from '../db.js';
 import { el, ersetzeKinder } from '../ui.js';
 import { ladeProjekt, rechne } from '../daten.js';
-import { baueplan, linienDetails, pruefZeilen, ZEICHEN } from '../plan.js';
+import { baueplan, raumDetails, bezugDetails, symbolDetails, linienDetails, pruefZeilen, ZEICHEN } from '../plan.js';
 import { geometrie, klemmePosition, FLAECHE_B } from '../planlayout.js';
 import { zeichnePlan, legende } from '../planzeichnung.js';
 
@@ -42,28 +42,57 @@ export async function renderPlan(container) {
   }
   const { ergebnis } = rechne(projekt);
   let anordnen = false;
-  let gewaehlteLinie = null;
+  let auswahl = { raum: null, symbol: null, linie: null }; // linie: Id der Wand oder gebündelten Linie
+  let bezuege = 'marken';
   let plan = null;
   let geom = null;
 
   const host = el('div', { class: 'plan-host' });
   const detail = el('section', { class: 'karte plan-detail', hidden: true, 'aria-live': 'polite' });
 
+  function karte(d, knopf = null) {
+    return [
+      el('h3', {}, d.titel),
+      d.kopf ? el('p', { class: 'zeile' }, d.kopf) : null,
+      d.zeilen.map((z) => el('p', { class: 'zeile' }, z)),
+      d.auffaelligkeiten?.length > 0 ? el('ul', { class: 'plan-auffaellig' }, d.auffaelligkeiten.map((t) => el('li', {}, `⚠ ${t}`))) : null,
+      knopf,
+    ].flat(2).filter(Boolean);
+  }
+
   function zeigeDetail() {
-    const linie = plan.linien.find((l) => l.id === gewaehlteLinie);
-    if (!linie) {
+    let inhalt = null;
+    const linie = auswahl.linie ? geom.linien.find((l) => l.id === auswahl.linie) : null;
+    if (linie) {
+      if (linie.art === 'wand') {
+        const einzel = plan.linien.find((l) => l.id === auswahl.linie);
+        const d = linienDetails(einzel);
+        inhalt = karte({ titel: d.titel, zeilen: d.zeilen });
+      } else {
+        inhalt = karte(bezugDetails(plan, linie.flaechenIds));
+      }
+    } else if (auswahl.raum) {
+      const d = raumDetails(plan, auswahl.raum);
+      if (d) {
+        const oeffnen = el('button', { type: 'button', class: 'primaer', onClick: () => { location.hash = `#raum/${auswahl.raum}`; } }, 'Raumdetail öffnen');
+        inhalt = karte(d, el('div', { class: 'knopfzeile' }, oeffnen));
+      }
+    } else if (auswahl.symbol) {
+      const d = symbolDetails(plan, auswahl.symbol);
+      if (d) inhalt = karte(d);
+    }
+    if (!inhalt) {
       detail.hidden = true;
       return;
     }
-    const d = linienDetails(linie);
-    ersetzeKinder(detail, el('h3', {}, d.titel), d.zeilen.map((z) => el('p', { class: 'zeile' }, z)));
+    ersetzeKinder(detail, inhalt);
     detail.hidden = false;
   }
 
   function zeichne() {
     plan = baueplan(projekt, ergebnis);
-    geom = geometrie(plan);
-    ersetzeKinder(host, zeichnePlan(geom, { interaktiv: true, ausgewaehlteLinie: gewaehlteLinie }));
+    geom = geometrie(plan, { auswahlRaum: auswahl.raum, auswahlSymbol: auswahl.symbol, bezuege });
+    ersetzeKinder(host, zeichnePlan(geom, { interaktiv: true, ausgewaehlteLinie: auswahl.linie }));
     host.classList.toggle('plan-anordnen', anordnen);
     host.style.touchAction = anordnen ? 'none' : 'auto';
     zeigeDetail();
@@ -82,9 +111,11 @@ export async function renderPlan(container) {
   host.addEventListener('pointerdown', (e) => {
     const kastenKnoten = e.target.closest('[data-raum]');
     const linienKnoten = e.target.closest('[data-linie]');
+    const symbolKnoten = e.target.closest('[data-symbol]');
     beruehrung = {
       id: e.pointerId, startX: e.clientX, startY: e.clientY, bewegt: false,
-      raumId: kastenKnoten?.dataset.raum ?? null, linieId: linienKnoten?.dataset.linie ?? null, versatz: null,
+      raumId: kastenKnoten?.dataset.raum ?? null, linieId: linienKnoten?.dataset.linie ?? null,
+      symbolId: symbolKnoten?.dataset.symbol ?? null, versatz: null,
     };
     if (anordnen && beruehrung.raumId) {
       const k = geom.kaesten.find((x) => x.id === beruehrung.raumId);
@@ -121,12 +152,16 @@ export async function renderPlan(container) {
       const raum = projekt.raeume.find((r) => r.id === b.raumId);
       await db.speichere('rooms', raum);
     } else if (b.raumId) {
-      location.hash = `#raum/${b.raumId}`;
-    } else if (b.linieId) {
-      gewaehlteLinie = gewaehlteLinie === b.linieId ? null : b.linieId;
+      auswahl = auswahl.raum === b.raumId && !auswahl.linie ? { raum: null, symbol: null, linie: null } : { raum: b.raumId, symbol: null, linie: null };
       zeichne();
-    } else if (gewaehlteLinie) {
-      gewaehlteLinie = null;
+    } else if (b.symbolId) {
+      auswahl = auswahl.symbol === b.symbolId ? { raum: null, symbol: null, linie: null } : { raum: null, symbol: b.symbolId, linie: null };
+      zeichne();
+    } else if (b.linieId) {
+      auswahl = { ...auswahl, linie: auswahl.linie === b.linieId ? null : b.linieId };
+      zeichne();
+    } else if (auswahl.raum || auswahl.symbol || auswahl.linie) {
+      auswahl = { raum: null, symbol: null, linie: null };
       zeichne();
     }
   });
@@ -135,7 +170,8 @@ export async function renderPlan(container) {
     const knoten = e.target.closest?.('[data-raum]');
     if (knoten && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
-      location.hash = `#raum/${knoten.dataset.raum}`;
+      auswahl = { raum: knoten.dataset.raum, symbol: null, linie: null };
+      zeichne();
     }
   });
 
@@ -144,6 +180,14 @@ export async function renderPlan(container) {
     anordnen = !anordnen;
     anordnenKnopf.setAttribute('aria-pressed', String(anordnen));
     anordnenKnopf.textContent = anordnen ? 'Verschieben ist an' : 'Kästen verschieben';
+    zeichne();
+  });
+
+  const bezugKnopf = el('button', { type: 'button', 'aria-pressed': 'false', class: 'klein' }, 'Alle Außenlinien zeigen');
+  bezugKnopf.addEventListener('click', () => {
+    bezuege = bezuege === 'alle' ? 'marken' : 'alle';
+    bezugKnopf.setAttribute('aria-pressed', String(bezuege === 'alle'));
+    bezugKnopf.textContent = bezuege === 'alle' ? 'Außenlinien ausblenden' : 'Alle Außenlinien zeigen';
     zeichne();
   });
 
@@ -167,10 +211,12 @@ export async function renderPlan(container) {
     el('div', { class: 'kopf' }, el('h2', {}, 'Plan')),
     el(
       'p', { class: 'beschreibung' },
-      'Schema der Räume und ihrer Nachbarn, aus den Eingaben erzeugt. Tippe auf einen Kasten, um den Raum zu öffnen, oder auf eine Linie '
-      + 'für Bauteil, Fläche, U-Wert und Verlust. Zum Umordnen „Kästen verschieben“ einschalten und die Kästen mit dem Finger ziehen.',
+      'Schema der Räume, aus den Eingaben erzeugt. Zwischen den Räumen laufen die Wände (Pfeil: Richtung des angerechneten Verlusts). '
+      + 'Die Marken im Kasten zeigen die Fläche an Außenluft, Nachbar, Zone und Erdreich. Tippe auf einen Kasten: Dann erscheinen seine Linien zu '
+      + 'den Randsymbolen und darunter alle Flächen mit Verlust, dort auch der Knopf zum Raumdetail. Ein Tipp auf ein Randsymbol zeigt, '
+      + 'welche Räume daran grenzen. Zum Umordnen „Kästen verschieben“ einschalten und die Kästen ziehen.',
     ),
-    el('div', { class: 'plan-bedienung' }, anordnenKnopf, zuruecksetzen),
+    el('div', { class: 'plan-bedienung' }, anordnenKnopf, bezugKnopf, zuruecksetzen),
     host,
     detail,
     legende(),

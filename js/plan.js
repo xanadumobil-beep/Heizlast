@@ -414,3 +414,62 @@ export function pruefZeilen(pruefung) {
     return r.punkte.map((p, i) => [i === 0 ? raum : '', p.titel, ZEICHEN[p.stufe], p.text]);
   });
 }
+
+// Eine Zeile je Fläche für die Detailkarten.
+function flaechenZeile(linie, ausSichtVon = null) {
+  const flaeche = linie.flaeche === null ? 'Fläche unvollständig' : `${formatZahl(linie.netto, 2)} m² netto`;
+  const u = linie.u ? `U ${linie.u.min === linie.u.max ? z(linie.u.min) : `${z(linie.u.min)} – ${z(linie.u.max)}`}` : 'U fehlt';
+  const verlust = linie.verlust ? wattBereich(linie.verlust.min, linie.verlust.max) : 'nicht gerechnet';
+  const ziel = linie.zielArt === 'raum' && ausSichtVon === linie.zielId ? `von „${linie.raumName}“ geführt` : linie.angrenzendText;
+  const zeile = `${linie.bezeichnung} (${linie.bauteilName}) · ${ziel} · ${flaeche} · ${u} · ${verlust}`;
+  return linie.marker.length > 0 ? `⚠ ${zeile}: ${linie.marker.map((m) => m.text).join(' ')}` : zeile;
+}
+
+// Detailkarte eines Raums: alle Flächen mit Gegenseite, Fläche, U-Wert und Verlust, dazu die Auffälligkeiten.
+export function raumDetails(plan, raumId) {
+  const kasten = plan.geschosse.flatMap((g) => g.kaesten).find((k) => k.id === raumId);
+  if (!kasten) return null;
+  const eigene = plan.linien.filter((l) => l.raumId === raumId);
+  const fremde = plan.linien.filter((l) => l.zielArt === 'raum' && l.zielId === raumId);
+  const zeilen = [
+    ...eigene.map((l) => flaechenZeile(l)),
+    ...fremde.map((l) => flaechenZeile(l, raumId)),
+  ];
+  const kopf = `${kasten.statusText}, ${typeof kasten.theta === 'number' ? `${z(kasten.theta)} °C` : 'Temperatur fehlt'}, ${typeof kasten.flaeche === 'number' ? `${formatZahl(kasten.flaeche, 1)} m²` : 'Fläche fehlt'}, ${kasten.geschoss}`;
+  return {
+    titel: kasten.name,
+    kopf,
+    zeilen: zeilen.length > 0 ? zeilen : ['Keine Raumflächen erfasst.'],
+    auffaelligkeiten: kasten.auffaelligkeiten,
+  };
+}
+
+// Detailkarte einer gebündelten Linie oder eines Symbols: alle Flächen zu dieser Gegenseite.
+export function bezugDetails(plan, flaechenIds) {
+  const linien = plan.linien.filter((l) => flaechenIds.includes(l.id));
+  if (linien.length === 0) return null;
+  const summe = linien.reduce((s, l) => s + (l.netto ?? 0), 0);
+  return {
+    titel: `${linien[0].raumName} → ${linien[0].angrenzendText}`,
+    kopf: `${linien.length} Fläche${linien.length === 1 ? '' : 'n'}, zusammen ${formatZahl(summe, 2)} m² netto`,
+    zeilen: linien.map((l) => flaechenZeile(l)),
+  };
+}
+
+// Detailkarte eines Symbols (Außenluft oder Zone): welche Räume grenzen mit wie viel Fläche daran.
+export function symbolDetails(plan, symbolId) {
+  const symbol = plan.symbole.find((s) => s.id === symbolId);
+  if (!symbol) return null;
+  const je = new Map();
+  for (const l of plan.linien.filter((x) => x.zielId === symbolId)) {
+    const e = je.get(l.raumId) ?? { name: l.raumName, flaeche: 0, anzahl: 0 };
+    e.flaeche += l.netto ?? 0;
+    e.anzahl += 1;
+    je.set(l.raumId, e);
+  }
+  return {
+    titel: `${symbol.name} (${symbol.temperatur})`,
+    kopf: je.size === 0 ? 'Keine Raumfläche grenzt hier an.' : `${je.size} ${je.size === 1 ? 'Raum grenzt' : 'Räume grenzen'} an.`,
+    zeilen: [...je.values()].map((e) => `${e.name}: ${e.anzahl} Fläche${e.anzahl === 1 ? '' : 'n'}, ${formatZahl(e.flaeche, 2)} m² netto`),
+  };
+}

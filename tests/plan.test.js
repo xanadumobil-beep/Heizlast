@@ -10,7 +10,9 @@
 import { test, wahr, gleich } from './runner.js';
 import { pruefeImport, projektAusSpeicher, baueExport } from '../js/io.js';
 import { rechne } from '../js/daten.js';
-import { baueplan, pruefeVollstaendigkeit, pruefZeilen, gueltigePosition, linienDetails, geschossReihenfolge } from '../js/plan.js';
+import {
+  baueplan, pruefeVollstaendigkeit, pruefZeilen, gueltigePosition, linienDetails, geschossReihenfolge, raumDetails, bezugDetails, symbolDetails,
+} from '../js/plan.js';
 import {
   geometrie, klemmePosition, linienBreite, rasterPlaetze, positionenFuerGeschoss, FLAECHE_B, FLAECHE_H, KASTEN_B, KASTEN_H, mittelpunktGrenzen,
 } from '../js/planlayout.js';
@@ -232,9 +234,10 @@ test('Plan: Fläche ohne Länge, Höhe oder Fläche wird markiert und hat Standa
   const linie = plan.linien.find((l) => l.id === 'l-fl-bad-aussen');
   wahr(linie.marker[0].art === 'masse' && linie.flaeche === null && linie.verlust === null, 'markiert, ohne Verlust');
   wahr(linienDetails(linie).zeilen.includes('Verlust: nicht gerechnet'), 'Details nennen „nicht gerechnet“');
-  const g = geometrie(plan);
-  const gl = g.linien.find((l) => l.id === 'l-fl-bad-aussen');
-  wahr(gl.markiert === true && gl.breite === linienBreite(0), 'Geometrie: markiert, Standardbreite');
+  const g = geometrie(plan, { bezuege: 'alle' });
+  const gl = g.linien.find((l) => l.id === 'b-raum-bad|aussen');
+  wahr(gl.markiert === true && gl.flaechenIds.length === 2, 'Geometrie: gebündelte Linie zur Außenluft ist markiert');
+  wahr(g.kaesten.find((k) => k.id === 'raum-bad').marken.find((m) => m.farbe === 'aussen').markiert === true, 'Marke im Kasten ebenfalls');
   wahr(plan.auffaelligkeiten.some((a) => a.raumId === 'raum-bad' && a.text.includes('Länge, Höhe oder Fläche fehlt')), 'in der Liste der Auffälligkeiten');
 });
 
@@ -318,7 +321,7 @@ test('Layout: Positionen werden in die Zeichenfläche geklemmt, ungültige Werte
 });
 
 test('Geometrie: Linien beginnen und enden am Rand der Kästen und Symbole, Breite folgt der Fläche', async () => {
-  const g = geometrie(planVon(await projekt()));
+  const g = geometrie(planVon(await projekt()), { bezuege: 'alle' });
   const ziele = new Map([...g.kaesten, ...g.symbole].map((t) => [t.id, t]));
   const amRand = (punkt, t) => {
     const dx = Math.abs(punkt.x - t.cx);
@@ -340,11 +343,87 @@ test('Geometrie: Linien beginnen und enden am Rand der Kästen und Symbole, Brei
 
 test('Geometrie: mehrere Wände zwischen denselben Räumen liegen parallel versetzt', async () => {
   const p = await projekt();
-  p.flaechen.push({ ...p.flaechen.find((f) => f.id === 'fl-wohnen-aussen'), id: 'fl-wohnen-aussen2', name: 'Südwand 2', oeffnungen: [] });
+  p.flaechen.push({ ...p.flaechen.find((f) => f.id === 'fl-bad-wohnen'), id: 'fl-bad-wohnen2', name: 'Zweite Wand' });
   const g = geometrie(planVon(p));
-  const beide = g.linien.filter((l) => l.zielId === 'aussen' && l.raumId === 'raum-wohnen' && (l.id === 'l-fl-wohnen-aussen' || l.id === 'l-fl-wohnen-aussen2'));
-  gleich(beide.length, 2, 0, 'zwei Linien');
+  const beide = g.linien.filter((l) => l.art === 'wand' && l.raumId === 'raum-bad');
+  gleich(beide.length, 2, 0, 'zwei Wandlinien Bad → Wohnzimmer');
   wahr(Math.abs(beide[0].y1 - beide[1].y1) > 5 || Math.abs(beide[0].x1 - beide[1].x1) > 5, 'Anfänge liegen auseinander');
+});
+
+// --- Übersichtlichkeit: Marken statt Linien zu den Randsymbolen -------------------------------------
+
+test('Geometrie: ohne Auswahl nur Wände zwischen Räumen, Außenbezüge als Marken im Kasten', async () => {
+  const plan = planVon(await projekt());
+  const g = geometrie(plan);
+  gleich(g.linien.length, 2, 0, 'zwei Wandlinien (Bad↔Wohnzimmer, Flur↔Wohnzimmer)');
+  wahr(g.linien.every((l) => l.art === 'wand'), 'nur Wände');
+  const wohnen = g.kaesten.find((k) => k.id === 'raum-wohnen');
+  wahr(wohnen.marken.map((m) => m.farbe).join(',') === 'aussen,nachbar,erdreich', `Reihenfolge der Marken: ${wohnen.marken.map((m) => m.farbe)}`);
+  const flaeche = (farbe) => wohnen.marken.find((m) => m.farbe === farbe).flaeche;
+  // Außenluft: Südwand 12,5 m² + Dach 20 m²; Nachbar: Westwand 4 · 2,5 = 10 m²; Erdreich: Bodenplatte 20 m²
+  wahr(flaeche('aussen') === 32.5 && flaeche('nachbar') === 10 && flaeche('erdreich') === 20, `Marken: ${JSON.stringify(wohnen.marken)}`);
+  const flur = g.kaesten.find((k) => k.id === 'raum-flur');
+  wahr(flur.marken.map((m) => m.farbe).join(',') === 'aussen,unbeheizt', 'Flur: Außenluft und unbeheizter Keller');
+});
+
+test('Geometrie: „alle Außenlinien“ bündelt je Raum und Gegenseite eine Linie', async () => {
+  const g = geometrie(planVon(await projekt()), { bezuege: 'alle' });
+  const bezuege = g.linien.filter((l) => l.art === 'bezug');
+  // Wohnzimmer: Außenluft (Süd + Dach), Nachbar, Erdreich; Bad: Außenluft (Wand + Dach), Erdreich; Flur: Außenluft (Eingang + Dach), Keller
+  gleich(bezuege.length, 7, 0, 'sieben gebündelte Linien statt zehn Einzellinien');
+  const sued = bezuege.find((l) => l.id === 'b-raum-wohnen|aussen');
+  wahr(sued.flaechenIds.length === 2 && sued.flaechenIds.includes('l-fl-wohnen-aussen') && sued.flaechenIds.includes('l-fl-wohnen-dach'), 'beide Außenflächen in einer Linie');
+  wahr(sued.breite > linienBreite(8), 'Stärke folgt der Summe (8,02 + 20 m² netto)');
+});
+
+test('Geometrie: Auswahl eines Raums zeigt nur dessen Linien zu den Randsymbolen', async () => {
+  const plan = planVon(await projekt());
+  const bad = geometrie(plan, { auswahlRaum: 'raum-bad' });
+  const aussen = bad.linien.filter((l) => l.art === 'bezug');
+  wahr(aussen.length === 2 && aussen.every((l) => l.raumId === 'raum-bad'), 'Bad: Außenluft und Erdreich');
+  wahr(bad.kaesten.find((k) => k.id === 'raum-bad').gewaehlt && !bad.kaesten.find((k) => k.id === 'raum-flur').gewaehlt, 'nur das Bad ist gewählt');
+  const symbol = geometrie(plan, { auswahlSymbol: 'aussen' });
+  const raeume = symbol.linien.filter((l) => l.art === 'bezug').map((l) => l.raumId).sort();
+  wahr(raeume.join(',') === 'raum-bad,raum-flur,raum-wohnen', `Außenluft grenzt an: ${raeume}`);
+  wahr(symbol.symbole.find((s) => s.id === 'aussen').gewaehlt, 'Symbol gewählt');
+});
+
+test('Details: Raumkarte listet alle Flächen mit Gegenseite, U-Wert und Verlust, auch aus dem Nachbarraum geführte Wände', async () => {
+  const plan = planVon(await projekt());
+  const d = raumDetails(plan, 'raum-wohnen');
+  wahr(d.titel === 'Wohnzimmer' && d.kopf === 'Beheizt, 20 °C, 20,0 m², EG', d.kopf);
+  gleich(d.zeilen.length, 6, 0, 'vier eigene Flächen und zwei im Nachbarraum geführte Wände');
+  wahr(d.zeilen.some((z) => z.includes('Südwand') && z.includes('Außenluft') && z.includes('8,02 m² netto') && z.includes('626 – 750 W')), 'Südwand mit Verlust');
+  wahr(d.zeilen.some((z) => z.includes('von „Bad“ geführt') && z.includes('22 – 26 W')), 'Wand vom Bad geführt');
+  wahr(raumDetails(plan, 'gibt-es-nicht') === null, 'unbekannter Raum');
+  const bad = bezugDetails(plan, ['l-fl-bad-aussen', 'l-fl-bad-dach']);
+  wahr(bad.kopf === '2 Flächen, zusammen 10,64 m² netto' && bad.titel === 'Bad → Außenluft', `${bad.titel} / ${bad.kopf}`);
+  const luft = symbolDetails(plan, 'aussen');
+  wahr(luft.kopf === '3 Räume grenzen an.' && luft.zeilen.length === 3 && luft.zeilen.some((z) => z.startsWith('Wohnzimmer: 2 Flächen')), luft.zeilen.join(' | '));
+  wahr(symbolDetails(plan, 'zone:zone-nachbar').kopf === '1 Raum grenzt an.', 'Nachbar: ein Raum');
+});
+
+test('Geometrie: bis zu zwölf Räume je Geschoss überlappen sich in der Startanordnung nicht', () => {
+  const kaesten = Array.from({ length: 12 }, (_, i) => ({ id: `r${i}`, name: `Raum ${i}`, position: null, verbunden: [] }));
+  const pos = positionenFuerGeschoss(kaesten);
+  const liste = [...pos.values()];
+  for (let i = 0; i < liste.length; i += 1) {
+    for (let j = i + 1; j < liste.length; j += 1) {
+      const dx = Math.abs(liste[i].x - liste[j].x) * (FLAECHE_B / 100);
+      const dy = Math.abs(liste[i].y - liste[j].y) * (FLAECHE_H / 100);
+      wahr(dx >= KASTEN_B || dy >= KASTEN_H, `Platz ${i} und ${j} überlappen nicht`);
+    }
+  }
+});
+
+test('Geometrie: verbundene Räume stehen in der Startanordnung nebeneinander', () => {
+  const k = (id, verbunden) => ({ id, name: id, position: null, verbunden });
+  // Kette a–b–c–d und ein einzelner Raum e: jedes Kettenglied liegt höchstens ein Feld (auch diagonal) von seinem Partner entfernt.
+  const pos = positionenFuerGeschoss([k('e', []), k('a', ['b']), k('b', ['a', 'c']), k('c', ['b', 'd']), k('d', ['c'])]);
+  const abstand = (x, y) => Math.hypot((pos.get(x).x - pos.get(y).x) * (FLAECHE_B / 100), (pos.get(x).y - pos.get(y).y) * (FLAECHE_H / 100));
+  for (const [x, y] of [['a', 'b'], ['b', 'c'], ['c', 'd']]) {
+    wahr(abstand(x, y) < 360, `${x} und ${y} liegen nebeneinander (${Math.round(abstand(x, y))} Einheiten)`);
+  }
 });
 
 // --- Speicherung und Bericht -------------------------------------------------------------------------
