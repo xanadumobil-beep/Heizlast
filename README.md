@@ -16,7 +16,8 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
 - **Passive Räume** (zum Beispiel ein Flur ohne Heizkörper): ihr Verlust wird prozentual auf die liefernden Räume verteilt.
 - **Plan:** automatisch erzeugtes Schema der Räume je Geschoss. Zwischen den Räumen laufen die Wände (Pfeil: Richtung des
   angerechneten Verlusts) und gestrichelte Linien für passive Räume. Farbige Marken im Kasten zeigen die Fläche an
-  Außenluft, Nachbar, Zone und Erdreich. Antippen eines Raums zeigt seine Linien zu den Randsymbolen und alle seine Flächen
+  Außenluft, Nachbar, Zone und Erdreich. Unbeheizte Zonen (zum Beispiel unbeheizte Kellerräume) stehen als verschiebbare
+  gestrichelte Kästen im gewählten Geschoss. Antippen eines Raums zeigt seine Linien zu den Randsymbolen und alle seine Flächen
   mit Verlust. Kästen lassen sich per Finger verschieben, die Positionen stehen in der Sicherungsdatei. Auffälligkeiten und
   eine Vollständigkeitsprüfung je Raum stehen direkt im Plan und im Bericht.
 - **Heizkörper und Vorlauftemperatur:** Leistung nach Norm-Bedingungen, Wärmepumpen-Kennlinien, nötige Vorlauftemperatur

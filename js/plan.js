@@ -149,8 +149,9 @@ export function pruefeVollstaendigkeit(projekt) {
 
 const ZONEN_REIHENFOLGE = ['nachbar', 'unbeheizt', 'erdreich'];
 
+// Unbeheizte Zonen stehen als Kästen im Plan, die übrigen Zonen (Erdreich, Nachbar) und die Außenluft als Randsymbole.
 function zonenSymbole(projekt) {
-  const sortiert = [...projekt.zonen].sort((a, b) => {
+  const sortiert = projekt.zonen.filter((zone) => zone.art !== 'unbeheizt').sort((a, b) => {
     const rang = (zone) => { const i = ZONEN_REIHENFOLGE.indexOf(zone.art); return i < 0 ? ZONEN_REIHENFOLGE.length : i; };
     return rang(a) - rang(b) || a.name.localeCompare(b.name, 'de');
   });
@@ -342,11 +343,35 @@ export function baueplan(projekt, ergebnis) {
 
   // Räume, die über eine Wand oder als Wärmelieferant mit diesem Raum verbunden sind (für die Startanordnung).
   const verbundenMit = (id) => [...new Set([
-    ...linien.filter((l) => l.zielArt === 'raum' && l.raumId === id).map((l) => l.zielId),
+    ...linien.filter((l) => l.raumId === id).map((l) => l.zielId),
     ...linien.filter((l) => l.zielArt === 'raum' && l.zielId === id).map((l) => l.raumId),
     ...(raumKarte.get(id).waermeLieferanten ?? []).map((l) => l.raumId),
     ...projekt.raeume.filter((r) => r.waermeLieferanten?.some((l) => l.raumId === id)).map((r) => r.id),
   ])];
+
+  // Geschoss einer unbeheizten Zone: eigene Angabe, sonst der Keller, sonst das unterste Geschoss.
+  const raumGeschosse = geschossReihenfolge(projekt.raeume.map((r) => r.geschoss));
+  const standardGeschoss = raumGeschosse.includes('Keller') ? 'Keller' : raumGeschosse[raumGeschosse.length - 1];
+  const zoneGeschoss = (zone) => zone.geschoss || standardGeschoss;
+  const zonenKaesten = (name) => projekt.zonen
+    .filter((zone) => zone.art === 'unbeheizt' && zoneGeschoss(zone) === name)
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+    .map((zone) => ({
+      id: `zone:${zone.id}`,
+      name: zone.name,
+      theta: null,
+      flaeche: null,
+      status: 'zone',
+      statusText: 'Unbeheizte Zone',
+      temperaturText: zone.temperatur.min === zone.temperatur.max ? `${z(zone.temperatur.min)} °C` : `${z(zone.temperatur.min)} bis ${z(zone.temperatur.max)} °C`,
+      geschoss: zoneGeschoss(zone),
+      position: gueltigePosition(zone.plan),
+      symbol: null,
+      verbunden: [...new Set(linien.filter((l) => l.zielId === `zone:${zone.id}`).map((l) => l.raumId))],
+      auffaellig: false,
+      auffaelligkeiten: [],
+      istZone: true,
+    }));
 
   const kaestenVon = (raum) => {
     const eigene = eindeutig.filter((a) => a.raumId === raum.id);
@@ -367,9 +392,12 @@ export function baueplan(projekt, ergebnis) {
     };
   };
 
-  const geschosse = geschossReihenfolge(projekt.raeume.map((r) => r.geschoss)).map((name) => ({
+  const geschosse = geschossReihenfolge([...projekt.raeume.map((r) => r.geschoss), ...projekt.zonen.filter((zone) => zone.art === 'unbeheizt').map(zoneGeschoss)]).map((name) => ({
     name,
-    kaesten: projekt.raeume.filter((r) => r.geschoss === name).sort((a, b) => a.name.localeCompare(b.name, 'de')).map(kaestenVon),
+    kaesten: [
+      ...projekt.raeume.filter((r) => r.geschoss === name).sort((a, b) => a.name.localeCompare(b.name, 'de')).map(kaestenVon),
+      ...zonenKaesten(name),
+    ],
   }));
 
   const passivLinien = [];
@@ -458,7 +486,8 @@ export function bezugDetails(plan, flaechenIds) {
 
 // Detailkarte eines Symbols (Außenluft oder Zone): welche Räume grenzen mit wie viel Fläche daran.
 export function symbolDetails(plan, symbolId) {
-  const symbol = plan.symbole.find((s) => s.id === symbolId);
+  const symbol = plan.symbole.find((s) => s.id === symbolId)
+    ?? plan.geschosse.flatMap((g) => g.kaesten).find((k) => k.istZone && k.id === symbolId);
   if (!symbol) return null;
   const je = new Map();
   for (const l of plan.linien.filter((x) => x.zielId === symbolId)) {
@@ -468,7 +497,7 @@ export function symbolDetails(plan, symbolId) {
     je.set(l.raumId, e);
   }
   return {
-    titel: `${symbol.name} (${symbol.temperatur})`,
+    titel: `${symbol.name} (${symbol.temperatur ?? symbol.temperaturText})`,
     kopf: je.size === 0 ? 'Keine Raumfläche grenzt hier an.' : `${je.size} ${je.size === 1 ? 'Raum grenzt' : 'Räume grenzen'} an.`,
     zeilen: [...je.values()].map((e) => `${e.name}: ${e.anzahl} Fläche${e.anzahl === 1 ? '' : 'n'}, ${formatZahl(e.flaeche, 2)} m² netto`),
   };

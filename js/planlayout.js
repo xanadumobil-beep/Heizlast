@@ -171,6 +171,7 @@ export function geometrie(plan, optionen = {}) {
   });
 
   const ziele = new Map([...kaesten, ...symbole].map((t) => [t.id, t]));
+  const kastenIds = new Set(kaesten.map((k) => k.id));
 
   // Zu zeichnende Einträge: Wände einzeln, Außenbezüge gebündelt (und nur bei Bedarf).
   const eintraege = [];
@@ -180,7 +181,8 @@ export function geometrie(plan, optionen = {}) {
       eintraege.push({ art: 'wand', id: l.id, raumId: l.raumId, zielId: l.zielId, farbe: l.farbe, flaeche: l.netto ?? l.flaeche, flaechenIds: [l.id], markiert: l.marker.length > 0, pfeil: l.pfeil });
       continue;
     }
-    const sichtbar = bezuege === 'alle' || l.raumId === auswahlRaum || l.zielId === auswahlSymbol;
+    // Linien zu unbeheizten Zonen (Kästen) gehören zum Plan wie die Wände, die übrigen nur bei Auswahl.
+    const sichtbar = bezuege === 'alle' || l.raumId === auswahlRaum || l.zielId === auswahlSymbol || l.zielId === auswahlRaum || kastenIds.has(l.zielId);
     if (!sichtbar) continue;
     const schluessel = `${l.raumId}|${l.zielId}`;
     if (!buendel.has(schluessel)) {

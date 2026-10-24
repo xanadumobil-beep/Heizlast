@@ -28,6 +28,7 @@
   --pl-passivlinie: #d98a00;
   --pl-warn: #d32f2f;
   --pl-markentext: #ffffff;
+  --pl-zone: #dcecec;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -59,6 +60,7 @@
     --pl-passivlinie: #f0b43c;
     --pl-warn: #ff6b60;
     --pl-markentext: #101010;
+    --pl-zone: #243536;
   }
 }
 
@@ -417,6 +419,7 @@ details.hilfe li { margin-bottom: 6px; }
 .pl-kasten.beheizt .pl-kastenflaeche { fill: var(--pl-beheizt); stroke: var(--pl-beheizt-rand); }
 .pl-kasten.passiv .pl-kastenflaeche { fill: var(--pl-passiv); stroke: var(--pl-passiv-rand); stroke-dasharray: 7 4; }
 .pl-kasten.unbeheizt .pl-kastenflaeche { fill: var(--pl-unbeheizt); stroke: var(--pl-unbeheizt-rand); }
+.pl-kasten.zone .pl-kastenflaeche { fill: var(--pl-zone); stroke: var(--pl-unbeh-zone); stroke-dasharray: 3 4; }
 .pl-kasten.auffaellig .pl-kastenflaeche { stroke: var(--pl-warn); stroke-width: 3.5; stroke-dasharray: none; }
 .pl-kasten { cursor: pointer; }
 .pl-kasten:focus { outline: none; }
@@ -433,6 +436,7 @@ details.hilfe li { margin-bottom: 6px; }
 .pl-symbol.gewaehlt .pl-symbolflaeche { stroke-width: 6; }
 .pl-linie.bezug .pl-strich { opacity: 0.8; }
 .pl-kastenname { font-size: 17px; font-weight: 700; }
+.pl-kastenname.lang { font-size: 14.5px; }
 .pl-kastentext { font-size: 15px; }
 .pl-kastenstatus { font-size: 13px; fill: var(--text-leise) !important; }
 .pl-pruefzeichen { font-size: 18px; font-weight: 800; }
@@ -458,6 +462,7 @@ details.hilfe li { margin-bottom: 6px; }
 .legende-probe.lp-kasten { height: 16px; border: 2px solid; border-radius: 4px; width: 26px; }
 .legende-probe.lp-kasten.beheizt { background: var(--pl-beheizt); border-color: var(--pl-beheizt-rand); }
 .legende-probe.lp-kasten.passiv { background: var(--pl-passiv); border-color: var(--pl-passiv-rand); border-style: dashed; }
+.legende-probe.lp-kasten.zone { background: var(--pl-zone); border-color: var(--pl-unbeh-zone); border-style: dashed; }
 .legende-probe.lp-kasten.unbeheizt { background: var(--pl-unbeheizt); border-color: var(--pl-unbeheizt-rand); }
 .pruef-ok { color: var(--ok); font-weight: 700; }
 .pruef-warnung { color: var(--warnung); font-weight: 700; }

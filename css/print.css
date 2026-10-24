@@ -71,5 +71,5 @@ a { color: inherit; text-decoration: none; }
   --pl-beheizt: #fde3c4; --pl-beheizt-rand: #d97a1c; --pl-passiv: #fff2a8; --pl-passiv-rand: #b8960a;
   --pl-unbeheizt: #dde6ee; --pl-unbeheizt-rand: #6e8294; --pl-aussen: #2f7fd0; --pl-erdreich: #8b5a2b;
   --pl-nachbar: #8e44ad; --pl-unbeh-zone: #4f8a8b; --pl-raum: #2e8b57; --pl-passivlinie: #d98a00; --pl-warn: #d32f2f;
-  --ok: #17703a; --warnung: #8a5a00; --fehler: #b3261e; --pl-markentext: #fff; }
+  --ok: #17703a; --warnung: #8a5a00; --fehler: #b3261e; --pl-markentext: #fff; --pl-zone: #dcecec; }
 .plan-legende { break-inside: avoid; }

@@ -85,8 +85,10 @@ export function zeichnePlan(geom, optionen = {}) {
       'g', { class: `pl-kasten ${k.status}${k.auffaellig ? ' auffaellig' : ''}${k.gewaehlt ? ' gewaehlt' : ''}`, 'data-raum': k.id, tabindex: interaktiv ? 0 : null },
       s('title', {}, `${k.name}: ${k.auffaelligkeiten.length > 0 ? k.auffaelligkeiten.join(' ') : 'keine Auffälligkeiten'}`),
       s('rect', { x: k.x, y: k.y, width: k.b, height: k.h, rx: 10, class: 'pl-kastenflaeche' }),
-      s('text', { x: k.x + 10, y: k.y + 24, class: 'pl-kastenname' }, kuerze(k.name, 18)),
-      s('text', { x: k.x + 10, y: k.y + 45, class: 'pl-kastentext' }, `${typeof k.theta === 'number' ? zahlZuText(k.theta) : '?'} °C · ${typeof k.flaeche === 'number' ? formatZahl(k.flaeche, 1) : '?'} m²`),
+      s('text', { x: k.x + 10, y: k.y + 24, class: `pl-kastenname${k.name.length > 15 ? ' lang' : ''}` }, kuerze(k.name, k.name.length > 15 ? 20 : 18)),
+      s('text', { x: k.x + 10, y: k.y + 45, class: 'pl-kastentext' }, k.istZone
+        ? k.temperaturText
+        : `${typeof k.theta === 'number' ? zahlZuText(k.theta) : '?'} °C · ${typeof k.flaeche === 'number' ? formatZahl(k.flaeche, 1) : '?'} m²`),
       s('text', { x: k.x + 10, y: k.y + 63, class: 'pl-kastenstatus' }, k.statusText),
     );
     if (k.symbol) {
@@ -117,7 +119,7 @@ export function legende() {
   return el(
     'div', { class: 'plan-legende' },
     el('ul', {}, LINIENARTEN.map((a) => probe(`lp-linie l-${a.farbe}`, a.text)), probe('lp-passiv', 'Wärmelieferung passiver Raum (gestrichelt, mit Anteil)')),
-    el('ul', {}, probe('lp-kasten beheizt', 'Beheizt'), probe('lp-kasten passiv', 'Passiv mitbeheizt'), probe('lp-kasten unbeheizt', 'Unbeheizt (nicht gerechnet)')),
+    el('ul', {}, probe('lp-kasten beheizt', 'Beheizt'), probe('lp-kasten passiv', 'Passiv mitbeheizt'), probe('lp-kasten unbeheizt', 'Unbeheizt (nicht gerechnet)'), probe('lp-kasten zone', 'Unbeheizte Zone (Temperatur statt Fläche)')),
     el(
       'p', { class: 'klein' },
       'Farbige Marken im Kasten: Fläche in m² an Außenluft, Nachbar, unbeheizter Zone oder Erdreich (Farben wie die Linien). '

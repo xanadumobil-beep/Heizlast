@@ -174,11 +174,12 @@ test('Vollständigkeit: unbeheizte Räume werden nicht geprüft', async () => {
 
 // --- Plan: Linien, Pfeile, Markierungen -----------------------------------------------------------
 
-test('Plan: Beispielhaus hat 3 Kästen im EG, 12 Linien und 2 Linien zu den Wärmelieferanten', async () => {
+test('Plan: Beispielhaus hat 3 Raumkästen und den Zonenkasten im EG, 12 Linien und 2 Linien zu den Wärmelieferanten', async () => {
   const plan = planVon(await projekt());
-  wahr(plan.geschosse.length === 1 && plan.geschosse[0].name === 'EG' && plan.geschosse[0].kaesten.length === 3, 'ein Geschoss mit drei Kästen');
+  wahr(plan.geschosse.length === 1 && plan.geschosse[0].name === 'EG' && plan.geschosse[0].kaesten.length === 4, 'ein Geschoss mit vier Kästen');
+  wahr(plan.geschosse[0].kaesten.filter((k) => k.istZone).map((k) => k.name).join() === 'Keller (unbeheizt)', 'die unbeheizte Zone ist ein Kasten (ohne Keller-Räume im untersten Geschoss)');
   gleich(plan.linien.length, 12, 0, 'Linien');
-  wahr(plan.symbole.map((s) => s.name).join(',') === 'Außenluft,Nachbargebäude,Keller (unbeheizt),Erdreich', `Symbole: ${plan.symbole.map((s) => s.name)}`);
+  wahr(plan.symbole.map((s) => s.name).join(',') === 'Außenluft,Nachbargebäude,Erdreich', `Symbole: ${plan.symbole.map((s) => s.name)}`);
   wahr(plan.passivLinien.length === 2 && plan.passivLinien.find((l) => l.zu === 'raum-wohnen').prozent === 60 && plan.passivLinien.find((l) => l.zu === 'raum-bad').prozent === 40, 'Flur liefert 60 % Wohnzimmer, 40 % Bad');
   wahr(plan.auffaelligkeiten.length === 0, 'keine Auffälligkeiten im Beispielhaus');
   const farben = Object.fromEntries(plan.linien.map((l) => [l.id, l.farbe]));
@@ -283,7 +284,7 @@ test('Plan: Geschosse stehen von oben nach unten (EG vor Keller), unbekannte Ges
 test('Layout: Räume ohne Position erhalten ein Raster ohne Überlappung', async () => {
   const plan = planVon(await projekt());
   const g = geometrie(plan);
-  gleich(g.kaesten.length, 3, 0, 'drei Kästen');
+  gleich(g.kaesten.length, 4, 0, 'drei Räume und eine unbeheizte Zone');
   for (let i = 0; i < g.kaesten.length; i += 1) {
     wahr(!g.kaesten[i].gespeichert, 'automatisch angeordnet');
     for (let j = i + 1; j < g.kaesten.length; j += 1) {
@@ -352,11 +353,11 @@ test('Geometrie: mehrere Wände zwischen denselben Räumen liegen parallel verse
 
 // --- Übersichtlichkeit: Marken statt Linien zu den Randsymbolen -------------------------------------
 
-test('Geometrie: ohne Auswahl nur Wände zwischen Räumen, Außenbezüge als Marken im Kasten', async () => {
+test('Geometrie: ohne Auswahl Wände und Linien zur unbeheizten Zone, übrige Außenbezüge als Marken im Kasten', async () => {
   const plan = planVon(await projekt());
   const g = geometrie(plan);
-  gleich(g.linien.length, 2, 0, 'zwei Wandlinien (Bad↔Wohnzimmer, Flur↔Wohnzimmer)');
-  wahr(g.linien.every((l) => l.art === 'wand'), 'nur Wände');
+  gleich(g.linien.length, 3, 0, 'zwei Wandlinien (Bad↔Wohnzimmer, Flur↔Wohnzimmer) und die Kellerdecke des Flurs zur Zone');
+  wahr(g.linien.filter((l) => l.art === 'wand').length === 2 && g.linien.filter((l) => l.art === 'bezug').every((l) => l.zielId === 'zone:zone-keller'), 'Außenluft, Erdreich und Nachbar bleiben Marken');
   const wohnen = g.kaesten.find((k) => k.id === 'raum-wohnen');
   wahr(wohnen.marken.map((m) => m.farbe).join(',') === 'aussen,nachbar,erdreich', `Reihenfolge der Marken: ${wohnen.marken.map((m) => m.farbe)}`);
   const flaeche = (farbe) => wohnen.marken.find((m) => m.farbe === farbe).flaeche;
@@ -379,11 +380,11 @@ test('Geometrie: „alle Außenlinien“ bündelt je Raum und Gegenseite eine Li
 test('Geometrie: Auswahl eines Raums zeigt nur dessen Linien zu den Randsymbolen', async () => {
   const plan = planVon(await projekt());
   const bad = geometrie(plan, { auswahlRaum: 'raum-bad' });
-  const aussen = bad.linien.filter((l) => l.art === 'bezug');
-  wahr(aussen.length === 2 && aussen.every((l) => l.raumId === 'raum-bad'), 'Bad: Außenluft und Erdreich');
+  const aussen = bad.linien.filter((l) => l.art === 'bezug' && l.raumId === 'raum-bad');
+  wahr(aussen.length === 2 && bad.linien.filter((l) => l.art === 'bezug').length === 3, 'Bad: Außenluft und Erdreich, dazu die immer sichtbare Linie des Flurs zur Zone');
   wahr(bad.kaesten.find((k) => k.id === 'raum-bad').gewaehlt && !bad.kaesten.find((k) => k.id === 'raum-flur').gewaehlt, 'nur das Bad ist gewählt');
   const symbol = geometrie(plan, { auswahlSymbol: 'aussen' });
-  const raeume = symbol.linien.filter((l) => l.art === 'bezug').map((l) => l.raumId).sort();
+  const raeume = symbol.linien.filter((l) => l.art === 'bezug' && l.zielId === 'aussen').map((l) => l.raumId).sort();
   wahr(raeume.join(',') === 'raum-bad,raum-flur,raum-wohnen', `Außenluft grenzt an: ${raeume}`);
   wahr(symbol.symbole.find((s) => s.id === 'aussen').gewaehlt, 'Symbol gewählt');
 });
@@ -424,6 +425,61 @@ test('Geometrie: verbundene Räume stehen in der Startanordnung nebeneinander', 
   for (const [x, y] of [['a', 'b'], ['b', 'c'], ['c', 'd']]) {
     wahr(abstand(x, y) < 360, `${x} und ${y} liegen nebeneinander (${Math.round(abstand(x, y))} Einheiten)`);
   }
+});
+
+// --- Unbeheizte Zonen als Kästen --------------------------------------------------------------------
+
+test('Zonen: nur unbeheizte Zonen werden Kästen, Erdreich und Nachbar bleiben Randsymbole', async () => {
+  const p = await projekt();
+  const plan = planVon(p);
+  const zonenKaesten = plan.geschosse.flatMap((g) => g.kaesten).filter((k) => k.istZone);
+  wahr(zonenKaesten.length === 1 && zonenKaesten[0].id === 'zone:zone-keller' && zonenKaesten[0].status === 'zone', 'eine unbeheizte Zone');
+  wahr(zonenKaesten[0].temperaturText === '6 bis 12 °C' && zonenKaesten[0].flaeche === null && zonenKaesten[0].symbol === null, 'Temperatur statt Fläche, keine Prüfung');
+  wahr(plan.symbole.every((s) => s.art !== 'unbeheizt'), 'unter den Randsymbolen ist keine unbeheizte Zone');
+  wahr(zonenKaesten[0].verbunden.join() === 'raum-flur', 'verbunden mit dem Flur (Kellerdecke)');
+});
+
+test('Zonen: Geschoss der Zone: eigene Angabe, sonst Keller, sonst unterstes Geschoss', async () => {
+  const p = await projekt();
+  p.zonen.push({ id: 'zone-pool', name: 'Poolraum', art: 'unbeheizt', temperatur: { min: 6, max: 12 }, notiz: '' });
+  wahr(planVon(p).geschosse.map((g) => g.name).join() === 'EG', 'ohne Keller-Räume: unterstes vorhandenes Geschoss');
+  p.raeume.push({ id: 'raum-k', name: 'Hobbyraum', geschoss: 'Keller', status: 'beheizt', theta: 18, flaeche: 10, hoehe: 2.3, waermeLieferanten: [] });
+  const mitKeller = planVon(p);
+  wahr(mitKeller.geschosse.map((g) => g.name).join() === 'EG,Keller', 'Keller vorhanden');
+  const imKeller = mitKeller.geschosse.find((g) => g.name === 'Keller').kaesten.filter((k) => k.istZone).map((k) => k.name).sort().join();
+  wahr(imKeller === 'Keller (unbeheizt),Poolraum', `beide Zonen standardmäßig im Keller: ${imKeller}`);
+  p.zonen.find((x) => x.id === 'zone-pool').geschoss = 'EG';
+  const eg = planVon(p).geschosse.find((g) => g.name === 'EG').kaesten.filter((k) => k.istZone).map((k) => k.name).join();
+  wahr(eg === 'Poolraum', `Poolraum nach eigener Angabe im EG: ${eg}`);
+  // Eine Zone in einem Geschoss ohne Räume legt dieses Geschoss an.
+  p.zonen.find((x) => x.id === 'zone-pool').geschoss = 'OG';
+  wahr(planVon(p).geschosse.map((g) => g.name).join() === 'OG,EG,Keller', 'neues Geschoss OG oben');
+});
+
+test('Zonen: Position der Zone wird übernommen und die Linien enden am Rand des Zonenkastens', async () => {
+  const p = await projekt();
+  p.zonen.find((z) => z.id === 'zone-keller').plan = { x: 70, y: 60 };
+  const g = geometrie(planVon(p));
+  const zone = g.kaesten.find((k) => k.id === 'zone:zone-keller');
+  wahr(zone.gespeichert && zone.prozent.x === 70 && zone.prozent.y === 60, 'gespeicherte Position');
+  const linie = g.linien.find((l) => l.zielId === 'zone:zone-keller');
+  const dx = Math.abs(linie.x2 - zone.cx);
+  const dy = Math.abs(linie.y2 - zone.cy);
+  wahr(Math.abs(dx - zone.b / 2) < 0.2 && dy <= zone.h / 2 + 0.2 || Math.abs(dy - zone.h / 2) < 0.2 && dx <= zone.b / 2 + 0.2, 'Ende am Rand des Zonenkastens');
+  const d = symbolDetails(planVon(p), 'zone:zone-keller');
+  wahr(d.titel === 'Keller (unbeheizt) (6 bis 12 °C)' && d.kopf === '1 Raum grenzt an.' && d.zeilen[0].startsWith('Flur: 1 Fläche'), `${d.titel} / ${d.kopf}`);
+});
+
+test('Zonen: Geschoss und Position der Zone sind im Export enthalten und bleiben beim Import erhalten', async () => {
+  const speicher = pruefeImport(await ladeText()).daten;
+  const zone = speicher.zones.find((z) => z.id === 'zone-keller');
+  zone.geschoss = 'Keller';
+  zone.plan = { x: 33.3, y: 44.4 };
+  const zurueck = pruefeImport(JSON.stringify(baueExport(speicher, jetzt)));
+  const z2 = zurueck.daten.zones.find((z) => z.id === 'zone-keller');
+  wahr(zurueck.ok && z2.geschoss === 'Keller' && z2.plan.x === 33.3 && z2.plan.y === 44.4, 'Zone behält Geschoss und Position');
+  const plan = baueplan(projektAusSpeicher(zurueck.daten), null);
+  wahr(plan.geschosse.map((g) => g.name).join() === 'EG,Keller', 'Zone legt das Keller-Geschoss an');
 });
 
 // --- Speicherung und Bericht -------------------------------------------------------------------------

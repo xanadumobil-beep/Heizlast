@@ -108,6 +108,11 @@ export const ZONEN_FELDER = [
     key: 'temperatur', label: 'Temperatur', typ: 'bereich', einheit: '°C',
     hinweis: 'Das Maximum geht in die günstige, das Minimum in die ungünstige Rechnung ein.',
   },
+  {
+    key: 'geschoss', label: 'Geschoss im Plan', typ: 'auswahl', sichtbarWenn: { feld: 'art', wert: 'unbeheizt' },
+    optionen: [{ wert: '', label: 'Automatisch (Keller, sonst unterstes Geschoss)' }, ...GESCHOSSE],
+    hinweis: 'Unbeheizte Zonen stehen im Plan als verschiebbarer Kasten in diesem Geschoss.',
+  },
   { key: 'notiz', label: 'Notiz', typ: 'notiz' },
 ];
 
@@ -130,7 +135,7 @@ export const OEFFNUNGS_FELDER = [
 ];
 
 export function neueZone() {
-  return { name: '', art: 'unbeheizt', temperatur: { min: null, max: null }, notiz: '' };
+  return { name: '', art: 'unbeheizt', temperatur: { min: null, max: null }, geschoss: '', notiz: '' };
 }
 
 export function neuesBauteil() {

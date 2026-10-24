@@ -54,6 +54,10 @@ Passiv mitbeheizte Räume sind keine Zonen, sondern Räume mit Status `passiv`.
 
 `id`, `name`, `art` (`erdreich`, `unbeheizt`, `nachbar`), `temperatur` (`{ "min", "max" }` in °C), `notiz`.
 
+Optional, nur für `art: "unbeheizt"`: `geschoss` (`""`, `EG` oder `Keller`; leer heißt automatisch: Keller, sonst das unterste
+Geschoss) und `plan` (`null` oder `{ "x": 0 bis 100, "y": 0 bis 100 }`, Mittelpunkt des Kastens in Prozent der Zeichenfläche des
+Geschosses, wie bei den Räumen). Unbeheizte Zonen erscheinen im Plan als verschiebbare Kästen, Erdreich und Nachbar als Randsymbole.
+
 ## `daten.bauteile`
 
 `id`, `name`, `art` (`aussenwand`, `dach`, `kellerdecke`, `bodenplatte`, `erdberuehrteWand`, `nachbarwand`, `innenwand`,
@@ -173,7 +177,7 @@ als fehlerhaft markiert.
 | Bereich | Pflicht | Optional |
 |---|---|---|
 | `einstellungen` | nichts (fehlende Felder erhalten Standardwerte) | alle Felder |
-| `zonen` | `id`, `name`, `art`, `temperatur.min`, `temperatur.max` | `notiz` |
+| `zonen` | `id`, `name`, `art`, `temperatur.min`, `temperatur.max` | `notiz`, `geschoss`, `plan` |
 | `bauteile` | `id`, `name`, `art`, `u.min`, `u.max` (größer 0), `quelle` | `aufbau` |
 | `oeffnungstypen` | `id`, `name`, `art`, `uw` (größer 0), `quelle` | |
 | `raeume` | `id`, `name`, `geschoss`, `status`, `theta` (bei `unbeheizt` darf `null` sein), `flaeche` und `hoehe` (oder `volumenManuell`), bei `passiv` die `waermeLieferanten` | `volumenManuell`, `luftwechsel`, `plan`, `notiz` |

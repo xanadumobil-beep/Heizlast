@@ -93,7 +93,7 @@ function baueFeld(feld, wert, beiAenderung) {
         'select', { onChange: beiAenderung },
         feld.optionen.map((o) => el('option', { value: o.wert }, o.label)),
       );
-      eingabe.value = wert;
+      eingabe.value = wert ?? feld.optionen[0].wert;
       return { eingabe, lies: () => eingabe.value, setze: (w) => { eingabe.value = w; } };
     }
     case 'schalter': {

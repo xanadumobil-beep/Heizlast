@@ -8,6 +8,12 @@ import { baueplan, raumDetails, bezugDetails, symbolDetails, linienDetails, prue
 import { geometrie, klemmePosition, FLAECHE_B } from '../planlayout.js';
 import { zeichnePlan, legende } from '../planzeichnung.js';
 
+// Räume und unbeheizte Zonen tragen ihre Position als plan: { x, y }. Zonenkästen haben die Id „zone:<Id>“.
+function objektZuKasten(projekt, id) {
+  if (id.startsWith('zone:')) return { store: 'zones', objekt: projekt.zonen.find((z) => z.id === id.slice(5)) };
+  return { store: 'rooms', objekt: projekt.raeume.find((r) => r.id === id) };
+}
+
 const TIPP_TOLERANZ = 6; // Pixel, ab denen eine Berührung als Verschieben gilt
 
 const KLASSE_ZEICHEN = { [ZEICHEN.ok]: 'pruef-ok', [ZEICHEN.warnung]: 'pruef-warnung', [ZEICHEN.fehler]: 'pruef-fehler' };
@@ -70,6 +76,12 @@ export async function renderPlan(container) {
         inhalt = karte({ titel: d.titel, zeilen: d.zeilen });
       } else {
         inhalt = karte(bezugDetails(plan, linie.flaechenIds));
+      }
+    } else if (auswahl.raum?.startsWith('zone:')) {
+      const d = symbolDetails(plan, auswahl.raum);
+      if (d) {
+        const bearbeiten = el('button', { type: 'button', onClick: () => { location.hash = '#zonen'; } }, 'Zonen bearbeiten');
+        inhalt = karte(d, el('div', { class: 'knopfzeile' }, bearbeiten));
       }
     } else if (auswahl.raum) {
       const d = raumDetails(plan, auswahl.raum);
@@ -137,7 +149,7 @@ export async function renderPlan(container) {
       x: ((p.x - beruehrung.versatz.x - boden.x) / FLAECHE_B) * 100,
       y: ((p.y - beruehrung.versatz.y - boden.y) / boden.h) * 100,
     });
-    projekt.raeume.find((r) => r.id === beruehrung.raumId).plan = neu;
+    objektZuKasten(projekt, beruehrung.raumId).objekt.plan = neu;
     cancelAnimationFrame(anfrage);
     anfrage = requestAnimationFrame(zeichne);
   });
@@ -149,8 +161,8 @@ export async function renderPlan(container) {
     if (b.bewegt) {
       cancelAnimationFrame(anfrage);
       zeichne();
-      const raum = projekt.raeume.find((r) => r.id === b.raumId);
-      await db.speichere('rooms', raum);
+      const { store, objekt } = objektZuKasten(projekt, b.raumId);
+      await db.speichere(store, objekt);
     } else if (b.raumId) {
       auswahl = auswahl.raum === b.raumId && !auswahl.linie ? { raum: null, symbol: null, linie: null } : { raum: b.raumId, symbol: null, linie: null };
       zeichne();
@@ -194,9 +206,11 @@ export async function renderPlan(container) {
   const zuruecksetzen = el('button', { type: 'button', class: 'klein' }, 'Anordnung zurücksetzen');
   zuruecksetzen.addEventListener('click', async () => {
     if (!confirm('Alle Kästen wieder automatisch anordnen? Die gespeicherten Positionen werden verworfen.')) return;
-    for (const r of projekt.raeume.filter((x) => x.plan)) {
-      delete r.plan;
-      await db.speichere('rooms', r);
+    for (const [store, liste] of [['rooms', projekt.raeume], ['zones', projekt.zonen]]) {
+      for (const eintrag of liste.filter((x) => x.plan)) {
+        delete eintrag.plan;
+        await db.speichere(store, eintrag);
+      }
     }
     zeichne();
   });
