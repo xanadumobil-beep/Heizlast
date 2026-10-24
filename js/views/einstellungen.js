@@ -5,6 +5,7 @@ import { el, ersetzeKinder, baueFormular } from '../ui.js';
 import { fordereDauerhaftenSpeicherAn, speicherStatus } from '../persist.js';
 import { hatFehler, hatWarnungen, validiereEinstellungen } from '../validate.js';
 import { EINSTELLUNGEN_FELDER } from '../schemas.js';
+import { bytesText } from '../foto.js';
 import { installierteVersion, onlineVersion, sucheUpdate, leereAppSpeicher, datumUhrzeit } from '../appversion.js';
 
 function groesse(bytes) {
@@ -16,6 +17,7 @@ async function baueSpeicherBlock() {
   const block = el('section', { class: 'karte speicher', 'data-lesen': true });
   const fuelle = async () => {
     const status = await speicherStatus();
+    const fotos = await db.fotoSpeicher();
     let text;
     if (!status.unterstuetzt) {
       text = 'Dieser Browser unterstützt dauerhaften Speicher nicht. Bitte regelmäßig eine Sicherungsdatei exportieren.';
@@ -27,7 +29,8 @@ async function baueSpeicherBlock() {
     ersetzeKinder(block, 
       el('h3', {}, 'Dauerhafter Speicher'),
       el('p', { class: status.gewaehrt ? 'ok' : 'zeile' }, text),
-      status.belegt !== null ? el('p', { class: 'zeile' }, `Belegt: ${groesse(status.belegt)} von ${groesse(status.kontingent)}`) : null,
+      status.belegt !== null ? el('p', { class: 'zeile' }, `Belegt: ${groesse(status.belegt)} von ${groesse(status.kontingent)} (Kontingent, soweit der Browser es meldet)`) : el('p', { class: 'zeile' }, 'Der Browser meldet keine Angaben zum Speicherplatz.'),
+      el('p', { class: 'zeile' }, `Fotos und Baupläne: ${bytesText(fotos.bytes)} (${fotos.fotos} Foto${fotos.fotos === 1 ? '' : 's'}, ${fotos.hintergruende} Bauplan/Baupläne)`),
       status.unterstuetzt && !status.gewaehrt
         ? el('button', { type: 'button', onClick: async () => { await fordereDauerhaftenSpeicherAn(); await fuelle(); } }, 'Erneut anfordern')
         : null,

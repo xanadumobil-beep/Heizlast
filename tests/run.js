@@ -8,6 +8,7 @@ import './io.test.js';
 import './bericht.test.js';
 import './plan.test.js';
 import './szenario.test.js';
+import './foto.test.js';
 import './offline.test.js';
 import { alleTestsAusfuehren } from './runner.js';
 

@@ -2,19 +2,18 @@
 //
 // Stores (jeweils mit Schlüssel "id"):
 //   settings, zones, components, openingTypes, rooms, surfaces, radiators, consumption, meta
-// Vorbereitet für spätere Stufen, aktuell leer:
-//   photos, markers (Stufe 2: Fotos je Raum mit beschrifteten Markierungen)
-//   scenarios       (Stufe 3: Szenarien mit überschriebenen U-Werten und Heizkörper-Status)
+// Stufe 2: photos (Fotos je Raum, Blob), markers (Markierungen auf Fotos), backgrounds (Bauplan je Geschoss, Blob)
+// Stufe 3: scenarios (Szenarien mit Abweichungen gegenüber dem Ist-Zustand)
 
 import { standardEinstellungen, standardZonen } from './schemas.js';
 import { mitStabilenIds } from './modell.js';
 
 const DB_NAME = 'heizlast';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // 2: Speicher "backgrounds" für die Baupläne
 
 export const STORES = [
   'settings', 'zones', 'components', 'openingTypes', 'rooms', 'surfaces', 'radiators', 'consumption', 'meta',
-  'photos', 'markers', 'scenarios',
+  'photos', 'markers', 'scenarios', 'backgrounds',
 ];
 
 let dbPromise = null;
@@ -100,6 +99,13 @@ export async function speichereVergleichsannahmen(annahmen) {
   await ausfuehren('settings', 'readwrite', (s) => s.put({ ...aktuell, vergleich: annahmen }));
 }
 
+// Umfang der Fotos und Baupläne im Speicher: Anzahl und Byte (Bild und Vorschau).
+export async function fotoSpeicher() {
+  const [fotos, hintergruende] = await Promise.all([alle('photos'), alle('backgrounds')]);
+  const bytes = (liste) => liste.reduce((s, x) => s + (x.groesse ?? ((x.blob?.size ?? 0) + (x.vorschau?.size ?? 0))), 0);
+  return { fotos: fotos.length, hintergruende: hintergruende.length, bytes: bytes(fotos) + bytes(hintergruende), bytesFotos: bytes(fotos), bytesHintergruende: bytes(hintergruende) };
+}
+
 // Aktives Szenario (null = Ist-Zustand). Der Zustand liegt in "meta" und gehört nicht zur Sicherungsdatei.
 export async function ladeAktivesSzenarioId() {
   return (await lade('meta', 'aktivesSzenario'))?.szenarioId ?? null;
@@ -137,8 +143,11 @@ export async function ladeEinstellungen() {
 
 // Stores mit Projektdaten (ohne Einstellungen und meta).
 export const DATEN_STORES = [
-  'zones', 'components', 'openingTypes', 'rooms', 'surfaces', 'radiators', 'consumption', 'photos', 'markers', 'scenarios',
+  'zones', 'components', 'openingTypes', 'rooms', 'surfaces', 'radiators', 'consumption', 'photos', 'markers', 'scenarios', 'backgrounds',
 ];
+
+// Fotos, Markierungen und Baupläne: Sie lassen sich beim Import auf Wunsch behalten (siehe ersetzeAlles).
+export const FOTO_STORES = ['photos', 'markers', 'backgrounds'];
 
 // Alle Projektdaten, die Einstellungen als Liste mit einem Eintrag (vollständig, mit Standardwerten ergänzt).
 export async function ladeAlles() {
@@ -149,7 +158,9 @@ export async function ladeAlles() {
 
 // Ersetzt alle Projektdaten in EINER Transaktion: schlägt etwas fehl, bleibt der alte Stand vollständig erhalten.
 // Die Markierung "init" bleibt erhalten, damit die Standardzone nicht wieder erscheint und der Beginn der Nutzung gilt.
-export async function ersetzeAlles(speicher, sicherung = null) {
+// behalteFotos: Fotos, Markierungen und Baupläne werden weder gelöscht noch aus dem Speicher überschrieben
+// (für Dateien ohne Fotos, wenn die vorhandenen Fotos erhalten bleiben sollen).
+export async function ersetzeAlles(speicher, sicherung = null, { behalteFotos = false } = {}) {
   if (schreibschutz) throw new SchreibschutzFehler();
   const bisher = await lade('meta', 'init');
   const db = await oeffneDb();
@@ -159,8 +170,10 @@ export async function ersetzeAlles(speicher, sicherung = null) {
     transaktion.onerror = () => fehler(transaktion.error);
     transaktion.onabort = () => fehler(transaktion.error);
     try {
-      for (const name of [...DATEN_STORES, 'settings']) transaktion.objectStore(name).clear();
+      const stores = [...DATEN_STORES, 'settings'].filter((n) => !(behalteFotos && FOTO_STORES.includes(n)));
+      for (const name of stores) transaktion.objectStore(name).clear();
       for (const [name, liste] of Object.entries(speicher)) {
+        if (behalteFotos && FOTO_STORES.includes(name)) continue;
         for (const objekt of liste) transaktion.objectStore(name).put(mitStabilenIds(name, objekt, neueId));
       }
       transaktion.objectStore('meta').put(bisher ?? { id: 'init', datum: new Date().toISOString() });

@@ -15,9 +15,10 @@ import { renderVerbrauch, renderVerbrauchListe } from './views/verbrauch.js';
 import { renderSicherung } from './views/sicherung.js';
 import { renderBericht } from './views/bericht.js';
 import { renderPlan } from './views/plan.js';
+import { renderFoto } from './views/fotos.js';
 import { aktualisiereBanner } from './banner.js';
 
-// render(container, neuLaden, parameter): parameter ist der Teil nach dem Schrägstrich im Link.
+// render(container, neuLaden, parameter, extra): parameter ist der Teil nach dem Schrägstrich im Link.
 const TABS = [
   { id: 'raeume', titel: 'Räume', render: (c, neu, id) => (id ? renderRaum(c, id, neu) : renderRaeume(c, neu)) },
   { id: 'plan', titel: 'Plan', render: (c) => renderPlan(c) },
@@ -30,6 +31,8 @@ const TABS = [
   { id: 'zonen', titel: 'Zonen', render: (c, neu) => renderKatalog(c, KATALOGE.zonen, neu) },
   { id: 'sicherung', titel: 'Sicherung', render: (c, neu) => renderSicherung(c, neu) },
   { id: 'einstellungen', titel: 'Einstellungen', render: (c) => renderEinstellungen(c) },
+  // Vollbild eines Fotos: #foto/<Foto>/<Markierung>. Gehört zu „Räume“ und steht nicht in der Navigation.
+  { id: 'foto', titel: 'Foto', versteckt: true, nav: 'raeume', render: (c, neu, id, markierung) => renderFoto(c, id, markierung) },
 ];
 
 // Ansichten, in denen die Bestandsdaten bearbeitet werden. Im Szenario-Betrieb sind sie schreibgeschützt.
@@ -41,9 +44,9 @@ let zeichnung = 0;
 
 // Links: #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bericht, #bauteile, #oeffnungen, #zonen, #sicherung, #einstellungen
 function aktuelleRoute() {
-  const [erster, parameter] = location.hash.slice(1).split('/');
+  const [erster, parameter, extra] = location.hash.slice(1).split('/');
   const tabId = erster === 'raum' ? 'raeume' : erster;
-  return { tab: TABS.find((t) => t.id === tabId) ?? TABS[0], parameter };
+  return { tab: TABS.find((t) => t.id === tabId) ?? TABS[0], parameter, extra };
 }
 
 // Szenario-Auswahl oben und farbiger Streifen, solange ein Szenario aktiv ist.
@@ -81,21 +84,21 @@ async function aktualisiereSzenarioLeiste() {
 }
 
 async function zeigeTab() {
-  const { tab, parameter } = aktuelleRoute();
+  const { tab, parameter, extra } = aktuelleRoute();
   const aktivesSzenario = await aktualisiereSzenarioLeiste();
   for (const link of navigation.querySelectorAll('a')) {
-    link.toggleAttribute('aria-current', link.dataset.tab === tab.id);
+    link.toggleAttribute('aria-current', link.dataset.tab === (tab.nav ?? tab.id));
   }
   aktualisiereBanner();
   const lauf = ++zeichnung;
   const neuerInhalt = el('div');
-  await tab.render(neuerInhalt, zeigeTab, parameter);
+  await tab.render(neuerInhalt, zeigeTab, parameter, extra);
   if (aktivesSzenario && SCHREIBGESCHUETZTE_TABS.has(tab.id)) macheSchreibgeschuetzt(neuerInhalt);
   if (lauf === zeichnung) inhalt.replaceChildren(neuerInhalt);
 }
 
 function baueNavigation() {
-  navigation.replaceChildren(...TABS.map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id }, t.titel)));
+  navigation.replaceChildren(...TABS.filter((t) => !t.versteckt).map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id }, t.titel)));
 }
 
 async function start() {

@@ -27,7 +27,7 @@ sind über `.gitignore` vom Hochladen ins Repository ausgeschlossen, weil das Re
 | Feld | Bedeutung |
 |---|---|
 | `format` | immer `"heizlast-projekt"` |
-| `schemaVersion` | derzeit `2` (Version 1 ohne Szenarien bleibt lesbar, neuere Versionen werden abgelehnt) |
+| `schemaVersion` | derzeit `3` (Version 1 ohne Szenarien und Version 2 ohne Fotos bleiben lesbar, neuere Versionen werden abgelehnt) |
 | `exportiertAm` | Zeitpunkt des Exports (ISO-Format) |
 | `app` | `"Heizlast"` |
 | `daten` | alle Projektdaten, siehe unten |
@@ -234,7 +234,25 @@ nie verändert. Fehlende Teile ergänzt die App beim Import mit Leerwerten.
 Abweichung auf etwas, das es nicht (mehr) gibt, wirkt sie nicht, und die App zeigt einen Hinweis. Die Kennung eines szenario-eigenen
 Heizkörpers darf nicht mit einem Heizkörper des Ist-Zustands übereinstimmen.
 
+## `daten.fotos`, `daten.markierungen`, `daten.hintergruende` (ab Version 3)
+
+Fotos und Baupläne sind optional. Eine Sicherung **ohne Fotos** hat diese drei Listen leer. Bilddaten stehen als data-URL (Base64) in der Datei,
+darum ist eine Sicherung mit Fotos deutlich größer. Die App zeigt die Größe vorab.
+
+**Fotos** (`fotos`): je Foto `id`, `raumId`, `titel`, `notiz`, `datum` (ISO), `breite`, `hoehe` (Pixel), `bild` (data-URL des verkleinerten JPEG,
+lange Seite höchstens 2048 px) und `vorschau` (kleines JPEG, optional). Einträge ohne `bild` werden beim Import ausgelassen und gemeldet.
+
+**Markierungen** (`markierungen`): je Markierung `id`, `fotoId`, `raumId`, `x`, `y` (Position in **Prozent des Bildes**, 0 bis 100, Ursprung links oben),
+`ziel` (`null` für frei beschriftet, sonst `{ "art": "oeffnung" | "heizkoerper" | "flaeche", "id": "<Id>" }`), `beschriftung` und `auto`
+(`true`: die Beschriftung folgt der Verknüpfung, zum Beispiel „F1 Hebeschiebeanlage“ oder „HK2 Typ 22“; `false`: eigener Text). Verweist `ziel` auf ein
+gelöschtes Element, bleibt die Markierung erhalten und die App zeigt „Verknüpfung fehlt“.
+
+**Baupläne** (`hintergruende`): je Geschoss höchstens einer, `id` ist `bg-<Geschoss>` (zum Beispiel `bg-EG`), dazu `geschoss`, `bild` (data-URL), `breite`, `hoehe`,
+`drehung` (0, 90, 180 oder 270 Grad im Uhrzeigersinn), `deckkraft` (0 bis 1) und `sichtbar`. Die Zeichenfläche des Geschosses nimmt das
+Seitenverhältnis des (gedrehten) Bildes an. Die Prozent-Positionen der Raum- und Zonenkästen (`plan`) bleiben gültig.
+
+**Nicht ins öffentliche Repository:** Fotos und Baupläne enthalten echte Hausdaten (oft auch Namen und Adressen im Schriftfeld). Das Beispielhaus enthält keine.
+
 ## Vorbereitet für spätere Stufen
 
-`fotos` und `markierungen` sind Listen und derzeit **leer**. In Stufe 2 kommen die Fotos (verkleinert, in der Datei enthalten) und
-Markierungen hinzu, die auf Öffnungen und Heizkörper verweisen. Alte Dateien bleiben lesbar.
+Die Stufen 1 bis 3 sind umgesetzt. Neue Felder bleiben abwärtskompatibel: Alte Dateien lassen sich weiter lesen.

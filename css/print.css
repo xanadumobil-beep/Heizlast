@@ -75,3 +75,7 @@ a { color: inherit; text-decoration: none; }
 .plan-legende { break-inside: avoid; }
 
 .b-tabelle tr.hervor th, .b-tabelle tr.hervor td { background: #d9d9d9 !important; color: #000; font-weight: 800; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.b-foto { break-inside: avoid; page-break-inside: avoid; }
+.b-foto-bild img { max-height: 95mm; }
+.b-marke { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pl-bauplan { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

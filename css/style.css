@@ -507,3 +507,55 @@ body.szenario-aktiv .szenariowahl select { border-color: var(--szenario); font-w
 .b-tabelle tr.hervor th, .b-tabelle tr.hervor td { font-weight: 800; background: #e6e6e6; border-top: 2px solid #000; border-bottom: 2px solid #000; }
 .jahreshinweis { margin: 8px 0; }
 .szenario-abschnitt .knopfzeile input[type="text"], .karte .knopfzeile input[type="text"] { width: 8em; min-width: 0; }
+
+/* --- Fotos und Markierungen ------------------------------------------------------------------ */
+.fotogalerie { list-style: none; margin: 10px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.fotogalerie a { display: grid; gap: 2px; text-decoration: none; color: var(--text); }
+.fotogalerie img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--linie); background: var(--flaeche); }
+.fotoname { font-weight: 600; overflow-wrap: anywhere; }
+.fotomarken { margin: 4px 0; }
+label.knopf input.versteckt { display: none; }
+
+.foto-voll {
+  position: fixed; inset: 0; z-index: 60; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background: var(--bg); padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+.foto-leiste { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--linie); background: var(--flaeche); }
+.foto-titel { flex: 1 1 120px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foto-leiste button[aria-pressed="true"] { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); font-weight: 600; }
+.foto-hinweis { margin: 0; padding: 0 12px; color: var(--text-leise); font-size: 0.9rem; }
+.foto-hinweis:empty { height: 0; padding: 0; } /* die Zeile bleibt im Raster, sonst rutscht das Foto in die falsche Zeile */
+.foto-flaeche { position: relative; overflow: hidden; background: #111; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.foto-flaeche.markiert-modus { cursor: crosshair; }
+.foto-welt { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.foto-bild { width: 100%; height: 100%; display: block; pointer-events: none; -webkit-user-drag: none; }
+.foto-markierungen { position: absolute; inset: 0; }
+.marke-punkt { position: absolute; transform: translate(-50%, -50%) scale(var(--inv, 1)); display: flex; align-items: center; gap: 4px; pointer-events: auto; cursor: pointer; }
+.marke-pin { width: 30px; height: 30px; border-radius: 50%; background: var(--akzent); color: var(--akzent-text); border: 3px solid #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+.marke-text { background: rgba(0,0,0,0.75); color: #fff; padding: 2px 8px; border-radius: 6px; font-size: 13px; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.marke-punkt.gewaehlt .marke-pin { background: #ffb300; color: #000; border-color: #000; }
+.marke-punkt.fehlt .marke-pin { background: var(--pl-warn); color: #fff; }
+.foto-panel { max-height: 42vh; overflow-y: auto; padding: 8px 12px 12px; background: var(--flaeche); border-top: 1px solid var(--linie); }
+.foto-panel label { display: grid; gap: 2px; margin: 6px 0; }
+.foto-details summary { cursor: pointer; font-weight: 600; min-height: 36px; }
+.markerliste { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.markereditor h4 { margin: 8px 0 4px; }
+.pl-bauplan { pointer-events: none; }
+.bauplanzeile { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--linie); }
+.bauplanzeile:first-child { border-top: 0; }
+.bauplanzeile .deckkraft { display: grid; gap: 2px; max-width: 420px; }
+.bauplaene summary { cursor: pointer; font-weight: 600; min-height: 36px; }
+.behalten { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0; }
+.behalten input { margin-top: 4px; }
+.fotoexport { margin: 6px 0; }
+.berichtzusatz { margin: 8px 0; }
+.fotowahl { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 6px 0 6px 26px; }
+.b-fotos { display: grid; gap: 14px; }
+.b-foto { margin: 0; break-inside: avoid; }
+.b-foto-kopf { margin-bottom: 4px; }
+.b-foto-bild { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.b-foto-bild img { max-width: 100%; max-height: 105mm; width: auto; height: auto; display: block; border: 1px solid var(--linie); }
+.b-marke { position: absolute; transform: translate(-50%, -50%); min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; background: #0b5cad; color: #fff; border: 2px solid #fff; font: 700 12px/16px -apple-system, system-ui, sans-serif; text-align: center; box-shadow: 0 0 2px #000; }
+.b-marke.fehlt { background: #d32f2f; }
+.b-foto-legende { margin: 4px 0 0 20px; padding: 0; font-size: 0.9rem; }
+.b-foto-notiz { margin: 4px 0 0; font-size: 0.9rem; }

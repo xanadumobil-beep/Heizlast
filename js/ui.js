@@ -12,7 +12,7 @@ export function el(tag, eigenschaften = {}, ...kinder) {
     else if (name.startsWith('on')) knoten.addEventListener(name.slice(2).toLowerCase(), wert);
     else knoten.setAttribute(name, wert === true ? '' : wert);
   }
-  for (const kind of kinder.flat()) {
+  for (const kind of kinder.flat(Infinity)) {
     if (kind === null || kind === undefined || kind === false) continue;
     knoten.append(kind.nodeType ? kind : document.createTextNode(String(kind)));
   }
@@ -22,7 +22,7 @@ export function el(tag, eigenschaften = {}, ...kinder) {
 // Ersetzt den Inhalt eines Elements. Leere Platzhalter (null, undefined, false) werden übersprungen,
 // replaceChildren würde sie sonst als Text "null" anzeigen.
 export function ersetzeKinder(knoten, ...kinder) {
-  knoten.replaceChildren(...kinder.flat().filter((k) => k !== null && k !== undefined && k !== false));
+  knoten.replaceChildren(...kinder.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
 }
 
 // Wert unter einem Pfad wie "aufheizzuschlag.wProM2" lesen und setzen.

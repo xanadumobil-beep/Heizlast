@@ -390,9 +390,20 @@ function abweichungsBloecke(info) {
   return bloecke;
 }
 
+// Anhang mit einem Foto je Raum und seinen Markierungen. Die Bilddaten setzt die Ansicht ein (Blobs sind kein Berichtsinhalt).
+function fotoAnhangAbschnitt(eintraege) {
+  return {
+    titel: 'Anhang: Fotos',
+    neueSeite: true,
+    bloecke: eintraege.length === 0
+      ? [text('Es gibt keine Fotos.')]
+      : [text('Je Raum ein Foto. Die Nummern im Bild gehören zur Liste darunter; „Verknüpfung fehlt“ heißt, dass das verknüpfte Element inzwischen gelöscht wurde.'), { art: 'fotos', eintraege }],
+  };
+}
+
 // --- Gesamtbericht ---------------------------------------------------------------------------
 
-// optionen.szenario: Angaben zu einem aktiven Szenario (siehe szenarioInfo). Dann gilt der Bericht für dieses Szenario:
+// optionen.fotoAnhang: Einträge aus fotoAnhang() (foto.js), erscheinen als Anhang. optionen.szenario: Angaben zu einem aktiven Szenario (siehe szenarioInfo). Dann gilt der Bericht für dieses Szenario:
 // projekt enthält die angewendeten Abweichungen, der Verbrauchsabgleich entfällt, ein Abschnitt listet die Abweichungen.
 export function baueBericht(projekt, jetzt = new Date(), optionen = {}) {
   const szenario = optionen.szenario ?? null;
@@ -425,6 +436,7 @@ export function baueBericht(projekt, jetzt = new Date(), optionen = {}) {
     { titel: 'Hinweise und Datenqualität', bloecke: hinweiseAbschnitt(ctx) },
     ...(projekt.raeume.length > 0 ? [{ titel: 'Plan und Vollständigkeit', neueSeite: true, bloecke: planAbschnitt(ctx) }] : []),
     ...(hatErgebnis ? [{ titel: 'Anlage: Raumflächen und Verluste', neueSeite: true, bloecke: flaechenAnlage(ctx) }] : []),
+    ...(optionen.fotoAnhang ? [fotoAnhangAbschnitt(optionen.fotoAnhang)] : []),
   ].map((a, i) => ({ ...a, titel: `${i + 1} ${a.titel}` }));
 
   const datum = datumText(jetzt);

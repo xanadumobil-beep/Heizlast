@@ -3,6 +3,7 @@
 import * as db from '../db.js';
 import { el, ersetzeKinder } from '../ui.js';
 import { oeffneDialog } from '../dialog.js';
+import { fotoAbschnitt, fotoMarkenZeile } from './fotos.js';
 import { leistungFehlt, watt, wattBereich, FALL_NAME, raumName, flaechenBezeichnung, angrenzendText, massText, grundText, meldungsTexte } from '../anzeige.js';
 import { heizkoerperAbschnitt } from './heizkoerper.js';
 import { ladeProjekt, rechne } from '../daten.js';
@@ -115,7 +116,8 @@ async function loescheRaum(projekt, raum, neuLaden) {
   const eigeneHeizkoerper = projekt.heizkoerper.filter((h) => h.raumId === raum.id);
   const zeilen = [
     `Raum „${raum.name}“ mit ${eigene.length} Raumfläche${eigene.length === 1 ? '' : 'n'}`
-    + ` und ${eigeneHeizkoerper.length} Heizkörper${eigeneHeizkoerper.length === 1 ? '' : 'n'} löschen?`,
+    + `, ${eigeneHeizkoerper.length} Heizkörper${eigeneHeizkoerper.length === 1 ? '' : 'n'}`
+    + ` und ${(projekt.fotoInfos ?? []).filter((f) => f.raumId === raum.id).length} Foto(s) mit Markierungen löschen?`,
   ];
   if (fremde.length > 0) {
     zeilen.push(`${fremde.length} Fläche${fremde.length === 1 ? '' : 'n'} in anderen Räumen grenz${fremde.length === 1 ? 't' : 'en'} an diesen Raum und werden danach markiert.`);
@@ -127,6 +129,10 @@ async function loescheRaum(projekt, raum, neuLaden) {
 
   for (const f of eigene) await db.loesche('surfaces', f.id);
   for (const h of eigeneHeizkoerper) await db.loesche('radiators', h.id);
+  for (const f of (await db.alle('photos')).filter((x) => x.raumId === raum.id)) {
+    for (const m of (await db.alle('markers')).filter((x) => x.fotoId === f.id)) await db.loesche('markers', m.id);
+    await db.loesche('photos', f.id);
+  }
   for (const r of lieferanten) {
     await db.speichere('rooms', { ...r, waermeLieferanten: r.waermeLieferanten.filter((l) => l.raumId !== raum.id) });
   }
@@ -259,6 +265,7 @@ function flaechenKarte(projekt, raum, flaeche, ergebnisRaum, neuLaden) {
             `${massText(o)} → ${formatZahl(oeffnungsGesamtflaeche(o), 2)} m²`,
           ),
           el('button', { type: 'button', class: 'klein', onClick: () => bearbeiteOeffnung(projekt, flaeche, index, neuLaden) }, 'Bearbeiten'),
+          o.id ? fotoMarkenZeile(projekt, 'oeffnung', o.id) : null,
           el('button', {
             type: 'button', class: 'klein gefahr',
             onClick: async () => {
@@ -273,6 +280,7 @@ function flaechenKarte(projekt, raum, flaeche, ergebnisRaum, neuLaden) {
     verlust[0] !== null
       ? el('p', { class: 'zeile' }, 'Verlust dieser Fläche: ', el('strong', {}, wattBereich(verlust[0], verlust[1])))
       : null,
+    fotoMarkenZeile(projekt, 'flaeche', flaeche.id),
     el(
       'div', { class: 'knopfzeile' },
       el('button', { type: 'button', onClick: () => bearbeiteFlaeche(projekt, raum, flaeche, neuLaden) }, 'Bearbeiten'),
@@ -497,6 +505,8 @@ export async function renderRaum(container, raumId, neuLaden) {
       : el('p', { class: 'leer' }, 'Noch keine Raumflächen. Mit „+ Fläche“ erfasst du Wände, Decke und Boden.'),
 
     heizkoerperAbschnitt(projekt, raum, neuLaden),
+
+    await fotoAbschnitt(projekt, raum, neuLaden),
 
     fremdeFlaechen.length > 0
       ? el(

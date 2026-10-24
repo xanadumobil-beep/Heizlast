@@ -5,6 +5,7 @@ import { baueRechenEingabe, baueHeizkoerperEingabe, migriereVerbrauch } from './
 import { berechneGebaeude } from './engine/heatload.js';
 import { bewerteRaeume } from './engine/vorlauf.js';
 import { normalisiereSzenario, wendeSzenarioAn } from './szenario.js';
+import { fotoMeta } from './foto.js';
 
 // Alle Szenarien, nach Name sortiert.
 export async function ladeSzenarien() {
@@ -29,9 +30,9 @@ export async function setzeAktivesSzenario(id) {
 
 // Projekt im Ist-Zustand, unabhängig vom aktiven Szenario.
 export async function ladeIstProjekt() {
-  const [einstellungen, zonen, bauteile, oeffnungstypen, raeume, flaechen, heizkoerper, verbrauch] = await Promise.all([
+  const [einstellungen, zonen, bauteile, oeffnungstypen, raeume, flaechen, heizkoerper, verbrauch, fotos, markierungen] = await Promise.all([
     db.ladeEinstellungen(), db.alle('zones'), db.alle('components'), db.alle('openingTypes'),
-    db.alle('rooms'), db.alle('surfaces'), db.alle('radiators'), db.alle('consumption'),
+    db.alle('rooms'), db.alle('surfaces'), db.alle('radiators'), db.alle('consumption'), db.alle('photos'), db.alle('markers'),
   ]);
   const nachName = (a, b) => a.name.localeCompare(b.name, 'de');
   return {
@@ -43,6 +44,9 @@ export async function ladeIstProjekt() {
     flaechen,
     heizkoerper,
     verbrauch: verbrauch.map(migriereVerbrauch).sort(nachName),
+    // Fotos ohne Bilddaten (die liegen in der Datenbank) und Markierungen, für Verknüpfungen und Hinweise in den Ansichten.
+    fotoInfos: fotos.map(fotoMeta),
+    markierungen,
   };
 }
 

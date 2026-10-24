@@ -20,6 +20,23 @@ function s(tag, eigenschaften = {}, ...kinder) {
   return knoten;
 }
 
+// Bauplan als Hintergrund: Das Bild liegt mit seiner (gedrehten) Form genau in der Zeichenfläche. Bei 90° und 270° wird es
+// mit vertauschter Breite und Höhe um die Mitte gedreht.
+function bauplanBild(boden, adresse) {
+  const bg = boden.hintergrund;
+  if (!bg || !bg.sichtbar || !adresse) return null;
+  const quer = bg.drehung === 90 || bg.drehung === 270;
+  const w = quer ? boden.h : boden.b;
+  const h = quer ? boden.b : boden.h;
+  const cx = boden.x + boden.b / 2;
+  const cy = boden.y + boden.h / 2;
+  return s('image', {
+    href: adresse, x: cx - w / 2, y: cy - h / 2, width: w, height: h, preserveAspectRatio: 'none',
+    opacity: String(bg.deckkraft), transform: bg.drehung ? `rotate(${bg.drehung} ${cx} ${cy})` : null,
+    class: 'pl-bauplan', 'clip-path': `inset(0)`,
+  });
+}
+
 const kuerze = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 export const LINIENARTEN = [
@@ -30,9 +47,9 @@ export const LINIENARTEN = [
   { farbe: 'raum', text: 'Raum zu Raum' },
 ];
 
-// optionen: { interaktiv, ausgewaehlteLinie }
+// optionen: { interaktiv, ausgewaehlteLinie, hintergrundUrls: Map Geschoss → Bildadresse des Bauplans }
 export function zeichnePlan(geom, optionen = {}) {
-  const { interaktiv = false, ausgewaehlteLinie = null } = optionen;
+  const { interaktiv = false, ausgewaehlteLinie = null, hintergrundUrls = new Map() } = optionen;
   const svg = s('svg', {
     viewBox: `0 0 ${geom.breite} ${geom.hoehe}`, class: 'plan-svg', role: 'img',
     'aria-label': 'Plan der Raumbeziehungen', preserveAspectRatio: 'xMidYMin meet',
@@ -41,6 +58,7 @@ export function zeichnePlan(geom, optionen = {}) {
   for (const b of geom.boeden) {
     svg.append(
       s('rect', { x: b.x, y: b.y, width: b.b, height: b.h, rx: 10, class: 'pl-boden', 'data-boden': b.name }),
+      bauplanBild(b, hintergrundUrls.get(b.name)),
       s('text', { x: b.x + 4, y: b.y - 10, class: 'pl-bodenname' }, b.name === 'Keller' ? 'Keller' : b.name),
     );
   }

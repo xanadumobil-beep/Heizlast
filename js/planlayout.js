@@ -20,24 +20,32 @@ const grenze = (x, min, max) => Math.min(max, Math.max(min, x));
 const runde = (x) => Math.round(x * 10) / 10;
 
 // Zulässiger Bereich für den Mittelpunkt in Prozent, damit der Kasten ganz in der Zeichenfläche bleibt.
-export function mittelpunktGrenzen() {
+export function mittelpunktGrenzen(hoehe = FLAECHE_H) {
   return {
     xMin: (KASTEN_B / 2 / FLAECHE_B) * 100,
     xMax: 100 - (KASTEN_B / 2 / FLAECHE_B) * 100,
-    yMin: (KASTEN_H / 2 / FLAECHE_H) * 100,
-    yMax: 100 - (KASTEN_H / 2 / FLAECHE_H) * 100,
+    yMin: (KASTEN_H / 2 / hoehe) * 100,
+    yMax: 100 - (KASTEN_H / 2 / hoehe) * 100,
   };
 }
 
-export function klemmePosition({ x, y }) {
-  const g = mittelpunktGrenzen();
+// Höhe der Zeichenfläche eines Geschosses: fest, oder mit einem Bauplan im Seitenverhältnis des (gedrehten) Bildes.
+export function bodenHoehe(hintergrund) {
+  if (!hintergrund || !(hintergrund.breite > 0) || !(hintergrund.hoehe > 0)) return FLAECHE_H;
+  const quer = hintergrund.drehung === 90 || hintergrund.drehung === 270;
+  const verhaeltnis = quer ? hintergrund.breite / hintergrund.hoehe : hintergrund.hoehe / hintergrund.breite;
+  return Math.round(Math.min(1400, Math.max(240, FLAECHE_B * verhaeltnis)));
+}
+
+export function klemmePosition({ x, y }, hoehe = FLAECHE_H) {
+  const g = mittelpunktGrenzen(hoehe);
   return { x: runde(grenze(x, g.xMin, g.xMax)), y: runde(grenze(y, g.yMin, g.yMax)) };
 }
 
 // Startanordnung: Das Raster verteilt sich über die ganze Zeichenfläche. Räume, die über eine Wand oder einen
 // passiven Raum verbunden sind, kommen nebeneinander. Räume ohne gespeicherte Position nehmen der Reihe nach den
 // ersten freien Platz, der keinen schon gesetzten Kasten überdeckt.
-export function rasterPlaetze(anzahl) {
+export function rasterPlaetze(anzahl, hoehe = FLAECHE_H) {
   const n = Math.max(anzahl, 1);
   const spalten = n <= 2 ? n : n <= 12 ? 3 : 4;
   const zeilen = Math.ceil(n / spalten);
@@ -45,12 +53,12 @@ export function rasterPlaetze(anzahl) {
   for (let i = 0; i < n; i += 1) {
     const spalte = i % spalten;
     const zeile = Math.floor(i / spalten);
-    plaetze.push(klemmePosition({ x: ((spalte + 0.5) / spalten) * 100, y: ((zeile + 0.5) / zeilen) * 100 }));
+    plaetze.push(klemmePosition({ x: ((spalte + 0.5) / spalten) * 100, y: ((zeile + 0.5) / zeilen) * 100 }, hoehe));
   }
   return plaetze;
 }
 
-const ueberlappt = (a, b) => Math.abs(a.x - b.x) * (FLAECHE_B / 100) < KASTEN_B + 10 && Math.abs(a.y - b.y) * (FLAECHE_H / 100) < KASTEN_H + 10;
+const ueberlappt = (a, b, hoehe = FLAECHE_H) => Math.abs(a.x - b.x) * (FLAECHE_B / 100) < KASTEN_B + 10 && Math.abs(a.y - b.y) * (hoehe / 100) < KASTEN_H + 10;
 
 // Reihenfolge der Räume für die Startanordnung: mit dem am stärksten verbundenen Raum beginnen, dann jeweils den
 // Raum mit den meisten Verbindungen zu den schon gesetzten. Gleichstand nach Name.
@@ -72,18 +80,18 @@ function ordneNachVerbindung(kaesten) {
 }
 
 // Position je Kasten eines Geschosses: gespeicherte, sonst automatische. Rückgabe: Map id → { x, y, gespeichert }
-export function positionenFuerGeschoss(kaesten) {
+export function positionenFuerGeschoss(kaesten, hoehe = FLAECHE_H) {
   const ergebnis = new Map();
   const belegt = [];
   for (const k of kaesten.filter((x) => x.position)) {
-    const p = klemmePosition(k.position);
+    const p = klemmePosition(k.position, hoehe);
     ergebnis.set(k.id, { ...p, gespeichert: true });
     belegt.push(p);
   }
-  const plaetze = rasterPlaetze(kaesten.length);
-  const einheiten = (p) => ({ x: (p.x / 100) * FLAECHE_B, y: (p.y / 100) * FLAECHE_H });
+  const plaetze = rasterPlaetze(kaesten.length, hoehe);
+  const einheiten = (p) => ({ x: (p.x / 100) * FLAECHE_B, y: (p.y / 100) * hoehe });
   for (const k of ordneNachVerbindung(kaesten.filter((x) => !x.position))) {
-    const frei = plaetze.filter((p) => !belegt.some((b) => ueberlappt(p, b)));
+    const frei = plaetze.filter((p) => !belegt.some((b) => ueberlappt(p, b, hoehe)));
     const kandidaten = frei.length > 0 ? frei : [plaetze[plaetze.length - 1]];
     // Der freie Platz mit der geringsten Entfernung zu den schon gesetzten verbundenen Räumen, sonst der erste.
     const partner = (k.verbunden ?? []).map((id) => ergebnis.get(id)).filter(Boolean).map(einheiten);
@@ -127,16 +135,25 @@ export function linienBreite(flaeche) {
 const MARKEN_REIHENFOLGE = ['aussen', 'nachbar', 'unbeheizt', 'erdreich'];
 
 // Koordinaten für den Plan. plan: Ergebnis von baueplan().
-// optionen: { auswahlRaum, auswahlSymbol, bezuege: 'auswahl' | 'zonen' | 'alle' }
+// optionen: { auswahlRaum, auswahlSymbol, bezuege: 'auswahl' | 'zonen' | 'alle', hintergruende: Map Geschoss → Bauplan }
 //   Wände zwischen Räumen und Linien passiver Räume stehen immer im Plan. Die Bezüge zu Außenluft und Zonen sind
 //   als Marken im Kasten zusammengefasst. Als Linie (je Raum und Gegenseite eine, Fläche summiert) erscheinen sie nur
 //   für den gewählten Raum oder Zonenkasten oder das gewählte Symbol ('auswahl', Standard), zusätzlich alle Linien zu
 //   Zonenkästen ('zonen', für den Bericht) oder alle Linien ('alle').
 // Rückgabe: { breite, hoehe, boeden, kaesten, symbole, linien, passivLinien }
 export function geometrie(plan, optionen = {}) {
-  const { auswahlRaum = null, auswahlSymbol = null, bezuege = 'auswahl' } = optionen;
-  const boeden = plan.geschosse.map((g, i) => ({ name: g.name, x: 0, y: RAND_OBEN + i * (FLAECHE_H + ABSTAND), b: FLAECHE_B, h: FLAECHE_H }));
-  const hoehe = Math.max(RAND_OBEN + boeden.length * (FLAECHE_H + ABSTAND) - ABSTAND + 10, SYMBOL_H * plan.symbole.length + 20);
+  const { auswahlRaum = null, auswahlSymbol = null, bezuege = 'auswahl', hintergruende = new Map() } = optionen;
+  // Geschosse untereinander. Hat ein Geschoss einen Bauplan, bekommt die Zeichenfläche dessen Seitenverhältnis. Die Positionen
+  // der Kästen sind Prozentwerte der Zeichenfläche und bleiben dabei gültig.
+  const boeden = [];
+  let obenY = RAND_OBEN;
+  for (const g of plan.geschosse) {
+    const bg = hintergruende.get(g.name) ?? null;
+    const h = bodenHoehe(bg);
+    boeden.push({ name: g.name, x: 0, y: obenY, b: FLAECHE_B, h, hintergrund: bg ? { ...bg } : null });
+    obenY += h + ABSTAND;
+  }
+  const hoehe = Math.max(obenY - ABSTAND + 10, SYMBOL_H * plan.symbole.length + 20);
 
   // Marken: je Raum die Flächen nach Art der Gegenseite zusammengezählt.
   const marken = new Map();
@@ -152,7 +169,7 @@ export function geometrie(plan, optionen = {}) {
   const kaesten = [];
   plan.geschosse.forEach((g, i) => {
     const boden = boeden[i];
-    const positionen = positionenFuerGeschoss(g.kaesten);
+    const positionen = positionenFuerGeschoss(g.kaesten, boden.h);
     for (const k of g.kaesten) {
       const pos = positionen.get(k.id);
       const cx = boden.x + (pos.x / 100) * boden.b;

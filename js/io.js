@@ -3,11 +3,11 @@
 // beschrieben in examples/format-beschreibung.md.
 //
 // Aufbau:
-//   { format: 'heizlast-projekt', schemaVersion: 2, exportiertAm: ISO-Zeit, app: 'Heizlast',
+//   { format: 'heizlast-projekt', schemaVersion: 3, exportiertAm: ISO-Zeit, app: 'Heizlast',
 //     daten: { einstellungen, zonen, bauteile, oeffnungstypen, raeume, raumflaechen, heizkoerper, verbrauch,
-//              fotos, markierungen, szenarien } }
-// Öffnungen stecken in den Raumflächen. Fotos und Markierungen sind für Stufe 2 vorgesehen und derzeit leer.
-// Version 2 (Stufe 3) enthält Szenarien. Dateien der Version 1 bleiben lesbar (sie haben keine Szenarien).
+//              fotos, markierungen, szenarien, hintergruende } }
+// Öffnungen stecken in den Raumflächen. Version 2 (Stufe 3) enthält Szenarien, Version 3 (Stufe 2) Fotos, Markierungen und
+// Baupläne (Hintergrundbilder je Geschoss, Bilddaten als data-URL). Dateien der Versionen 1 und 2 bleiben lesbar.
 
 import { standardEinstellungen, ZONENARTEN, BAUTEILARTEN, OEFFNUNGSARTEN, QUELLEN, STATI, GESCHOSSE, BAUARTEN_HK, HK_STATI, VENTILE, werte } from './schemas.js';
 import { doppelteIds, migriereVerbrauch, kennlinieZuText, mitStabilenIds } from './modell.js';
@@ -17,7 +17,7 @@ import {
 } from './validate.js';
 
 export const FORMAT_KENNUNG = 'heizlast-projekt';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const SICHERUNG_FRIST_TAGE = 14;
 
 // Interner Speicher (IndexedDB) und Schlüssel in der Datei. Die Einstellungen sind ein einzelnes Objekt.
@@ -32,6 +32,7 @@ export const DATEI_SCHLUESSEL = {
   photos: 'fotos',
   markers: 'markierungen',
   scenarios: 'szenarien',
+  backgrounds: 'hintergruende',
 };
 
 const TAG_MS = 24 * 60 * 60 * 1000;
@@ -50,9 +51,17 @@ export function exportDateiname(jetzt = new Date()) {
 // --- Export ------------------------------------------------------------------------------
 
 // speicher: { settings: [Einstellungen], zones: [...], components: [...], ... } wie aus der Datenbank.
-export function baueExport(speicher, jetzt = new Date()) {
+// Fotos: 'ohne' (Standard) lässt Fotos, Markierungen und Baupläne weg. 'platzhalter' setzt an die Stelle der Bilddaten je einen
+// Platzhalter, den fotoexport.js beim Schreiben der Datei durch die Einträge mit Bilddaten ersetzt (Blobs sind kein JSON).
+export const PLATZHALTER_FOTOS = '@@FOTOS@@';
+export const PLATZHALTER_HINTERGRUENDE = '@@HINTERGRUENDE@@';
+
+export function baueExport(speicher, jetzt = new Date(), { fotos = 'ohne' } = {}) {
   const daten = { einstellungen: speicher.settings?.[0] ?? standardEinstellungen() };
   for (const [store, schluessel] of Object.entries(DATEI_SCHLUESSEL)) daten[schluessel] = speicher[store] ?? [];
+  daten.fotos = fotos === 'platzhalter' ? [PLATZHALTER_FOTOS] : [];
+  daten.hintergruende = fotos === 'platzhalter' ? [PLATZHALTER_HINTERGRUENDE] : [];
+  if (fotos !== 'platzhalter') daten.markierungen = [];
   return { format: FORMAT_KENNUNG, schemaVersion: SCHEMA_VERSION, exportiertAm: jetzt.toISOString(), app: 'Heizlast', daten };
 }
 
@@ -156,6 +165,33 @@ export function inhaltsHinweise(d) {
   return meldungen;
 }
 
+// Fotos und Baupläne aus einer Datei: Einträge ohne Bilddaten (data-URL) lassen sich nicht übernehmen und werden entfernt.
+// Außerdem Hinweise auf Fotos ohne Raum und Markierungen ohne Foto. Verändert speicher und gibt die Hinweise zurück.
+function bereinigeFotos(speicher) {
+  const hinweise = [];
+  const istBild = (x) => typeof x === 'string' && x.startsWith('data:');
+  const vorher = speicher.photos.length;
+  speicher.photos = speicher.photos.filter((f) => istBild(f.bild));
+  if (speicher.photos.length < vorher) hinweise.push(`${vorher - speicher.photos.length} Foto(s) ohne Bilddaten werden nicht übernommen.`);
+  const vorherBg = speicher.backgrounds.length;
+  speicher.backgrounds = speicher.backgrounds.filter((b) => istBild(b.bild));
+  if (speicher.backgrounds.length < vorherBg) hinweise.push(`${vorherBg - speicher.backgrounds.length} Bauplan/Baupläne ohne Bilddaten werden nicht übernommen.`);
+  const raeume = new Set(speicher.rooms.map((r) => r.id));
+  for (const f of speicher.photos) {
+    if (!raeume.has(f.raumId)) hinweise.push(`Foto „${f.titel || f.id}“ gehört zu einem Raum, den es in der Datei nicht gibt.`);
+  }
+  const fotos = new Set(speicher.photos.map((f) => f.id));
+  const ohneFoto = speicher.markers.filter((m) => !fotos.has(m.fotoId)).length;
+  if (ohneFoto > 0) hinweise.push(`${ohneFoto} Markierung(en) gehören zu einem Foto, das nicht in der Datei steht.`);
+  return hinweise;
+}
+
+// Umfang der Fotos in einer Datei: Anzahl und ungefähre Größe der Bilddaten in Byte (data-URLs, Base64).
+function fotoInfo(speicher) {
+  const bytes = (liste) => liste.reduce((s, x) => s + Math.round(((x.bild?.length ?? 0) + (x.vorschau?.length ?? 0)) * 0.75), 0);
+  return { fotos: speicher.photos.length, hintergruende: speicher.backgrounds.length, bytes: bytes(speicher.photos) + bytes(speicher.backgrounds) };
+}
+
 // Prüft den Inhalt einer Sicherungsdatei. Rückgabe:
 //   { ok: false, fehler: [Text] }
 //   { ok: true, daten (interner Speicher), exportiertAm, zusammenfassung, verweise, inhalt }
@@ -189,6 +225,7 @@ export function pruefeImport(text) {
   for (const [store, schluessel] of Object.entries(DATEI_SCHLUESSEL)) speicher[store] = datei.daten[schluessel] ?? [];
   speicher.consumption = speicher.consumption.map(migriereVerbrauch);
   speicher.scenarios = speicher.scenarios.map(normalisiereSzenario);
+  const fotoHinweise = bereinigeFotos(speicher);
   // IDs ergänzen, wo es erlaubt ist (Öffnungen ohne ID), damit sie danach dauerhaft sind.
   speicher.surfaces = speicher.surfaces.map((f) => mitStabilenIds('surfaces', f, () => `oeffnung-${Math.random().toString(36).slice(2, 12)}`));
 
@@ -202,7 +239,8 @@ export function pruefeImport(text) {
     daten: speicher,
     exportiertAm: typeof datei.exportiertAm === 'string' ? datei.exportiertAm : null,
     zusammenfassung: zusammenfassung(speicher),
-    verweise: pruefeVerweise(speicher),
+    verweise: [...pruefeVerweise(speicher), ...fotoHinweise],
+    fotoInfo: fotoInfo(speicher),
     inhalt: inhaltsHinweise(speicher),
   };
 }
@@ -220,6 +258,9 @@ export function zusammenfassung(speicher) {
     heizkoerper: anzahl('radiators'),
     verbrauch: anzahl('consumption'),
     szenarien: anzahl('scenarios'),
+    fotos: anzahl('photos'),
+    markierungen: anzahl('markers'),
+    hintergruende: anzahl('backgrounds'),
   };
 }
 
@@ -233,6 +274,9 @@ export const ZUSAMMENFASSUNG_NAMEN = {
   heizkoerper: 'Heizkörper',
   verbrauch: 'Verbrauchsabgleiche',
   szenarien: 'Szenarien',
+  fotos: 'Fotos',
+  markierungen: 'Markierungen auf Fotos',
+  hintergruende: 'Baupläne (Hintergrundbilder)',
 };
 
 // --- Sicherungsstatus --------------------------------------------------------------------
@@ -273,5 +317,7 @@ export function projektAusSpeicher(speicher) {
     flaechen: speicher.surfaces,
     heizkoerper: speicher.radiators,
     verbrauch: [...speicher.consumption].sort(nachName),
+    fotoInfos: (speicher.photos ?? []).map(({ blob, vorschau, bild, ...rest }) => rest),
+    markierungen: speicher.markers ?? [],
   };
 }

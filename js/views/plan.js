@@ -7,6 +7,8 @@ import { ladeProjekt, rechne } from '../daten.js';
 import { baueplan, raumDetails, bezugDetails, symbolDetails, linienDetails, pruefZeilen, ZEICHEN } from '../plan.js';
 import { geometrie, klemmePosition, FLAECHE_B } from '../planlayout.js';
 import { zeichnePlan, legende } from '../planzeichnung.js';
+import { ladeBauplan, BildFehler } from '../bild.js';
+import { BAUPLAN_MAX_SEITE, BAUPLAN_QUALITAET, bytesText } from '../foto.js';
 
 // Räume und unbeheizte Zonen tragen ihre Position als plan: { x, y }. Zonenkästen haben die Id „zone:<Id>“.
 function objektZuKasten(projekt, id) {
@@ -36,7 +38,12 @@ export function pruefTabelle(pruefung) {
   );
 }
 
+// Adressen der Bauplan-Bilder; beim nächsten Aufbau des Plans werden die alten freigegeben.
+let bauplanAdressen = [];
+
 export async function renderPlan(container) {
+  for (const a of bauplanAdressen) URL.revokeObjectURL(a);
+  bauplanAdressen = [];
   const projekt = await ladeProjekt();
   if (projekt.raeume.length === 0) {
     ersetzeKinder(
@@ -47,6 +54,19 @@ export async function renderPlan(container) {
     return;
   }
   const { ergebnis } = rechne(projekt);
+  // Baupläne je Geschoss: Bild, Deckkraft, Sichtbarkeit, Drehung. Sie sind Hintergrund, keine Bestandsdaten, und bleiben im Szenario-Betrieb änderbar.
+  const hintergruende = new Map((await db.alle('backgrounds')).map((b) => [b.geschoss, b]));
+  const hintergrundUrls = new Map();
+  const aktualisiereUrls = (geschoss) => {
+    const bg = hintergruende.get(geschoss);
+    if (!bg) { hintergrundUrls.delete(geschoss); return; }
+    if (!hintergrundUrls.has(geschoss) || hintergrundUrls.get(geschoss).blob !== bg.blob) {
+      const adresse = URL.createObjectURL(bg.blob);
+      bauplanAdressen.push(adresse);
+      hintergrundUrls.set(geschoss, { adresse, blob: bg.blob });
+    }
+  };
+  for (const g of hintergruende.keys()) aktualisiereUrls(g);
   let anordnen = false;
   let auswahl = { raum: null, symbol: null, linie: null }; // linie: Id der Wand oder gebündelten Linie
   let bezuege = 'auswahl';
@@ -103,8 +123,8 @@ export async function renderPlan(container) {
 
   function zeichne() {
     plan = baueplan(projekt, ergebnis);
-    geom = geometrie(plan, { auswahlRaum: auswahl.raum, auswahlSymbol: auswahl.symbol, bezuege });
-    ersetzeKinder(host, zeichnePlan(geom, { interaktiv: true, ausgewaehlteLinie: auswahl.linie }));
+    geom = geometrie(plan, { auswahlRaum: auswahl.raum, auswahlSymbol: auswahl.symbol, bezuege, hintergruende });
+    ersetzeKinder(host, zeichnePlan(geom, { interaktiv: true, ausgewaehlteLinie: auswahl.linie, hintergrundUrls: new Map([...hintergrundUrls].map(([k, v]) => [k, v.adresse])) }));
     host.classList.toggle('plan-anordnen', anordnen);
     host.style.touchAction = anordnen ? 'none' : 'auto';
     zeigeDetail();
@@ -148,7 +168,7 @@ export async function renderPlan(container) {
     const neu = klemmePosition({
       x: ((p.x - beruehrung.versatz.x - boden.x) / FLAECHE_B) * 100,
       y: ((p.y - beruehrung.versatz.y - boden.y) / boden.h) * 100,
-    });
+    }, boden.h);
     objektZuKasten(projekt, beruehrung.raumId).objekt.plan = neu;
     cancelAnimationFrame(anfrage);
     anfrage = requestAnimationFrame(zeichne);
@@ -204,6 +224,67 @@ export async function renderPlan(container) {
     zeichne();
   });
 
+  // --- Baupläne ---
+  const bauplanBereich = el('div', {});
+  const bauplanMeldung = el('p', { class: 'zeile', 'aria-live': 'polite' });
+  const speichereBauplan = async (bg) => { await db.speichere('backgrounds', bg); hintergruende.set(bg.geschoss, bg); aktualisiereUrls(bg.geschoss); };
+
+  async function waehleBauplan(geschoss, datei) {
+    bauplanMeldung.className = 'zeile';
+    bauplanMeldung.textContent = `Bauplan für ${geschoss} wird verarbeitet …`;
+    try {
+      const { blob, breite, hoehe } = await ladeBauplan(datei, { maxSeite: BAUPLAN_MAX_SEITE, qualitaet: BAUPLAN_QUALITAET });
+      const alt = hintergruende.get(geschoss);
+      await speichereBauplan({
+        id: `bg-${geschoss}`, geschoss, blob, breite, hoehe, groesse: blob.size, quelle: /pdf/i.test(datei.type) ? 'pdf' : 'bild',
+        drehung: alt?.drehung ?? 0, deckkraft: alt?.deckkraft ?? 0.5, sichtbar: true,
+      });
+      bauplanMeldung.className = 'ok';
+      bauplanMeldung.textContent = `Bauplan für ${geschoss} gespeichert (${breite} × ${hoehe} px, ${bytesText(blob.size)}).`;
+      zeichneBauplanSteuerung();
+      zeichne();
+    } catch (ausnahme) {
+      bauplanMeldung.className = 'meldung fehler';
+      bauplanMeldung.textContent = ausnahme instanceof BildFehler ? ausnahme.message : ausnahme.name === 'QuotaExceededError' ? 'Der Speicher des Geräts ist voll.' : `Der Bauplan lässt sich nicht speichern: ${ausnahme.message}`;
+    }
+  }
+
+  function zeichneBauplanSteuerung() {
+    ersetzeKinder(bauplanBereich, plan.geschosse.map((g) => {
+      const bg = hintergruende.get(g.name);
+      const datei = el('input', { type: 'file', accept: 'image/*,application/pdf', class: 'versteckt', 'aria-label': `Bauplan für ${g.name} wählen` });
+      datei.addEventListener('change', async () => { const f = datei.files[0]; datei.value = ''; if (f) await waehleBauplan(g.name, f); });
+      const aendere = async (aenderung) => { Object.assign(bg, aenderung); await speichereBauplan(bg); zeichneBauplanSteuerung(); zeichne(); };
+      const deckkraft = bg ? el('input', { type: 'range', min: 10, max: 100, step: 5, value: Math.round(bg.deckkraft * 100), 'aria-label': `Deckkraft Bauplan ${g.name}` }) : null;
+      if (deckkraft) {
+        deckkraft.addEventListener('input', () => { bg.deckkraft = Number(deckkraft.value) / 100; zeichne(); });
+        deckkraft.addEventListener('change', () => aendere({ deckkraft: Number(deckkraft.value) / 100 }));
+      }
+      return el(
+        'div', { class: 'bauplanzeile' },
+        el('strong', {}, g.name),
+        el('span', { class: 'klein' }, bg ? `${bg.breite} × ${bg.hoehe} px, ${bytesText(bg.groesse ?? bg.blob.size)}, Drehung ${bg.drehung}°` : 'kein Bauplan'),
+        el('div', { class: 'knopfzeile' },
+          el('label', { class: 'knopf' }, bg ? 'Bauplan ersetzen' : 'Bauplan wählen', datei),
+          bg ? el('button', { type: 'button', 'aria-pressed': String(bg.sichtbar), onClick: () => aendere({ sichtbar: !bg.sichtbar }) }, bg.sichtbar ? 'Ausblenden' : 'Einblenden') : null,
+          bg ? el('button', { type: 'button', 'aria-label': 'Links drehen', onClick: () => aendere({ drehung: (bg.drehung + 270) % 360 }) }, '⟲ 90°') : null,
+          bg ? el('button', { type: 'button', 'aria-label': 'Rechts drehen', onClick: () => aendere({ drehung: (bg.drehung + 90) % 360 }) }, '⟳ 90°') : null,
+          bg ? el('button', {
+            type: 'button', class: 'gefahr',
+            onClick: async () => {
+              if (!confirm(`Bauplan für ${g.name} entfernen? Die Kästen behalten ihre Positionen.`)) return;
+              await db.loesche('backgrounds', bg.id);
+              hintergruende.delete(g.name);
+              hintergrundUrls.delete(g.name);
+              zeichneBauplanSteuerung();
+              zeichne();
+            },
+          }, 'Entfernen') : null),
+        bg ? el('label', { class: 'deckkraft' }, el('span', { class: 'klein' }, `Deckkraft ${Math.round(bg.deckkraft * 100)} %`), deckkraft) : null,
+      );
+    }));
+  }
+
   const zuruecksetzen = el('button', { type: 'button', class: 'klein' }, 'Anordnung zurücksetzen');
   zuruecksetzen.addEventListener('click', async () => {
     if (!confirm('Alle Kästen wieder automatisch anordnen? Die gespeicherten Positionen werden verworfen.')) return;
@@ -233,6 +314,7 @@ export async function renderPlan(container) {
       + 'Zum Umordnen „Kästen verschieben“ einschalten und die Kästen ziehen.',
     ),
     el('div', { class: 'plan-bedienung' }, anordnenKnopf, bezugKnopf, zuruecksetzen),
+    el('details', { class: 'karte bauplaene' }, el('summary', {}, 'Baupläne als Hintergrund'), el('p', { class: 'zeile' }, 'Je Geschoss ein Bild (fotografierter oder als PDF gespeicherter Bauplan). Die Zeichenfläche nimmt das Seitenverhältnis des Bauplans an, die Kästen behalten ihre Positionen in Prozent. Mit „Drehen“ richtest du den Plan so aus, dass er zum anderen Geschoss passt.'), bauplanMeldung, bauplanBereich),
     host,
     detail,
     legende(),
@@ -241,5 +323,6 @@ export async function renderPlan(container) {
     el('h3', {}, 'Vollständigkeit je Raum'),
     pruefTabelle(plan.pruefung),
   );
+  zeichneBauplanSteuerung();
   zeichne();
 }

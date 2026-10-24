@@ -26,6 +26,13 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
   Bestandsdaten sind schreibgeschützt. Der Tab „Szenarien“ vergleicht alle Szenarien mit dem Ist-Zustand (Heizlast, Minderung,
   Vorlauftemperatur, Verluste nach Bauteilart), nennt den „Auslegungswert Wärmepumpe (obere Grenze)“ und zeigt eingegebene Kosten nach Förderung sowie eine
   Schätzung der Jahreswärme-Differenz (Gradtagzahl, JAZ und Strompreis gibst du ein, die App schätzt nichts selbst). Der Bericht lässt sich für den Ist-Zustand, ein Szenario oder den Vergleich drucken.
+- **Fotos und Markierungen:** Je Raum Fotos (Kamera oder Mediathek, mehrere auf einmal, HEIC vom iPhone), automatisch auf höchstens
+  2048 Pixel verkleinert und nur auf dem Gerät gespeichert. Im Vollbild lässt sich per Fingergeste zoomen und verschieben. Per Tippen setzt
+  du Markierungen, verknüpft mit einer Öffnung, einem Heizkörper oder einer Raumfläche (Beschriftung automatisch, änderbar). Umgekehrt zeigt
+  jeder Heizkörper, jede Öffnung und jede Fläche, auf welchen Fotos sie markiert sind. Fällt die Verknüpfung weg, bleibt die Markierung mit
+  dem Hinweis „Verknüpfung fehlt“.
+- **Bauplan im Plan:** Je Geschoss ein Hintergrundbild (fotografierter oder als PDF-Seite gespeicherter Bauplan) mit regelbarer Deckkraft und
+  Drehung in 90°-Schritten. Die Raum- und Zonenkästen liegen darüber, ihre Prozent-Positionen bleiben gültig.
 - **Heizkörper und Vorlauftemperatur:** Leistung nach Norm-Bedingungen, Wärmepumpen-Kennlinien, nötige Vorlauftemperatur
   je Haus und je Raum, bestimmender Raum.
 - **Verbrauchsabgleich:** Gasverbrauch und Holz in eine Heizlast umgerechnet, mit zwei Innentemperaturen
@@ -81,6 +88,10 @@ Deshalb gibt es die Sicherungsdatei:
 1. Tab **Sicherung** öffnen, **„Sicherungsdatei exportieren“** tippen.
 2. Im Teilen-Menü **„In Dateien sichern“** wählen, am besten in iCloud Drive.
 3. Die App erinnert dich mit einem Banner, wenn die letzte Sicherung länger als 14 Tage zurückliegt.
+
+**Mit oder ohne Fotos:** Die Sicherung gibt es „ohne Fotos“ (klein) und „mit Fotos“ (die App zeigt die Größe vorher an). Fotos belegen
+den meisten Speicher. Beim Import einer Datei ohne Fotos fragt die App, ob die vorhandenen Fotos, Markierungen und Baupläne behalten werden sollen.
+Fotos und Baupläne gehören nicht in das öffentliche Repository.
 
 **Wiederherstellen:** Tab Sicherung, **„Sicherungsdatei wählen …“**, Datei auswählen, Vorschau prüfen,
 **„Daten ersetzen“**. Der Import ersetzt alle Daten in der App und wird entweder vollständig oder gar nicht ausgeführt.
@@ -144,4 +155,4 @@ tools/            Hilfsskripte für den Service Worker
 examples/         erfundenes Beispielhaus und Formatbeschreibung
 ```
 
-Geplant für Stufe 2 (im Datenmodell und im Sicherungsformat bereits vorgesehen): Fotos je Raum mit Markierungen.
+Die drei Stufen (Berechnung, Szenarien, Fotos mit Bauplan) sind umgesetzt.

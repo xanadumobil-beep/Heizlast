@@ -3,6 +3,7 @@
 import * as db from '../db.js';
 import { el } from '../ui.js';
 import { oeffneDialog } from '../dialog.js';
+import { fotoMarkenZeile } from './fotos.js';
 import { validiereHeizkoerper } from '../validate.js';
 import { parseKennlinie, kennlinieZuText } from '../modell.js';
 import { leistungFehlt, heizkoerperLeistungsText as leistungsText, heizkoerperMasseText as massText } from '../anzeige.js';
@@ -29,7 +30,7 @@ export function bearbeiteHeizkoerper(raum, heizkoerper, neuLaden) {
   });
 }
 
-function karte(raum, h, neuLaden) {
+function karte(projekt, raum, h, neuLaden) {
   const fehlt = leistungFehlt(h);
   const titel = `${label(BAUARTEN_HK, h.bauart)}${h.bauart === 'platten' && h.typ ? ` Typ ${label(HK_TYPEN, h.typ)}` : ''}`;
   return el(
@@ -47,6 +48,7 @@ function karte(raum, h, neuLaden) {
       ? el('p', { class: 'zeile' }, 'Altes Ventil: kein hydraulischer Abgleich möglich. Nur ein Hinweis, die Leistung ändert sich nicht.')
       : null,
     h.notiz ? el('p', { class: 'zeile notiz' }, h.notiz) : null,
+    fotoMarkenZeile(projekt, 'heizkoerper', h.id),
     el(
       'div', { class: 'knopfzeile' },
       el('button', { type: 'button', onClick: () => bearbeiteHeizkoerper(raum, h, neuLaden) }, 'Bearbeiten'),
@@ -82,7 +84,7 @@ export function heizkoerperAbschnitt(projekt, raum, neuLaden) {
       el('button', { type: 'button', class: 'primaer', onClick: () => bearbeiteHeizkoerper(raum, neuerHeizkoerper(raum.id), neuLaden) }, '+ Heizkörper'),
     ),
     eigene.length > 0
-      ? el('div', { class: 'karten' }, eigene.map((h) => karte(raum, h, neuLaden)))
+      ? el('div', { class: 'karten' }, eigene.map((h) => karte(projekt, raum, h, neuLaden)))
       : el('p', { class: 'leer' }, 'Noch keine Heizkörper. Ohne Heizkörper gibt es für diesen Raum keine Vorlauftemperatur.'),
   );
 }

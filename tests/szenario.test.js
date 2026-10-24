@@ -315,9 +315,9 @@ test('Schreibschutz: Bestandsdaten sind bei aktivem Szenario nicht beschreibbar,
 
 // --- Export und Import ----------------------------------------------------------------------------------
 
-test('Export enthält Szenarien (schemaVersion 2), Import übernimmt sie, alte Dateien (Version 1) bleiben lesbar', async () => {
+test('Export enthält Szenarien (ab schemaVersion 2), Import übernimmt sie, alte Dateien (Version 1) bleiben lesbar', async () => {
   const text = await ladeText();
-  wahr(JSON.parse(text).schemaVersion === 1 && SCHEMA_VERSION === 2, 'Beispieldatei ist Version 1, die App schreibt Version 2');
+  wahr(JSON.parse(text).schemaVersion === 1 && SCHEMA_VERSION === 3, 'Beispieldatei ist Version 1, die App schreibt Version 3');
   const alt = pruefeImport(text);
   wahr(alt.ok && alt.zusammenfassung.szenarien === 0, 'Version 1 wird gelesen, ohne Szenarien');
 
@@ -328,16 +328,16 @@ test('Export enthält Szenarien (schemaVersion 2), Import übernimmt sie, alte D
   sz.abweichungen.neueHeizkoerper.push({ id: 'n1', raumId: 'raum-bad', bauart: 'platten', status: 'neu', ventil: 'neu', normleistung: 600, normVorlauf: 55, normRuecklauf: 45, normRaum: 20, kennlinie: [] });
   speicher.scenarios = [sz];
   const datei = baueExport(speicher, jetzt);
-  wahr(datei.schemaVersion === 2 && datei.daten.szenarien.length === 1 && datei.daten.szenarien[0].name === 'Dach gedämmt', 'Export mit Szenario');
+  wahr(datei.schemaVersion === 3 && datei.daten.szenarien.length === 1 && datei.daten.szenarien[0].name === 'Dach gedämmt', 'Export mit Szenario');
   const zurueck = pruefeImport(JSON.stringify(datei));
   wahr(zurueck.ok && zurueck.zusammenfassung.szenarien === 1, 'Import');
   wahr(JSON.stringify(zurueck.daten.scenarios[0]) === JSON.stringify(normalisiereSzenario(sz)), 'Szenario nach dem Import unverändert');
   wahr(zurueck.verweise.length === 0, 'keine Verweisprobleme');
 
   const neuer = JSON.parse(JSON.stringify(datei));
-  neuer.schemaVersion = 3;
+  neuer.schemaVersion = 4;
   const abgelehnt = pruefeImport(JSON.stringify(neuer));
-  wahr(!abgelehnt.ok && abgelehnt.fehler[0].includes('Version 2'), 'Dateien neuerer Version werden abgelehnt');
+  wahr(!abgelehnt.ok && abgelehnt.fehler[0].includes('Version 3'), 'Dateien neuerer Version werden abgelehnt');
 });
 
 test('Import normalisiert unvollständige Szenarien und meldet Abweichungen ohne Ziel', async () => {

@@ -3,6 +3,8 @@
 import * as db from '../db.js';
 import { el, ersetzeKinder } from '../ui.js';
 import { aktualisiereBanner } from '../banner.js';
+import { bytesText } from '../foto.js';
+import { baueExportBlob, dateiFotosZuBlobs, schaetzeExportGroesse } from '../fotoexport.js';
 import {
   baueExport, exportText, exportDateiname, pruefeImport, zusammenfassung, ZUSAMMENFASSUNG_NAMEN,
   sicherungsStatus, datumText, SICHERUNG_FRIST_TAGE,
@@ -56,8 +58,11 @@ function begrenzteListe(titel, eintraege, max = 10) {
 
 export async function renderSicherung(container) {
   const [speicher, sicherung, start] = await Promise.all([db.ladeAlles(), db.ladeSicherung(), db.lade('meta', 'init')]);
+  const fotoStand = await db.fotoSpeicher();
   const aktuell = zusammenfassung(speicher);
   const jetzt = new Date();
+  const groesse = schaetzeExportGroesse(speicher, jetzt);
+  const dateinameMitFotos = exportDateiname(jetzt).replace(/\.json$/, '-mit-fotos.json');
   const dateiname = exportDateiname(jetzt);
   const datei = new File([exportText(baueExport(speicher, jetzt))], dateiname, { type: 'application/json' });
 
@@ -75,32 +80,39 @@ export async function renderSicherung(container) {
   };
   zeigeStatus(sicherung);
 
-  async function sichere() {
-    const ergebnis = await gibDateiAus(datei);
+  async function sichere(zuGeben = datei, name = dateiname) {
+    const ergebnis = await gibDateiAus(zuGeben);
     if (ergebnis === 'abgebrochen') {
       exportRueckmeldung.textContent = '';
       return false;
     }
-    const neu = { zeit: new Date().toISOString(), art: 'export', dateiname };
+    const neu = { zeit: new Date().toISOString(), art: 'export', dateiname: name };
     await db.speichereSicherung(neu);
     zeigeStatus(neu);
     exportRueckmeldung.textContent = ergebnis === 'geteilt'
       ? 'Sicherung übergeben. Im Teilen-Menü „In Dateien sichern“ wählen und einen Ordner in iCloud Drive aussuchen.'
-      : `Die Datei „${dateiname}“ wurde heruntergeladen. Sie liegt im Download-Ordner des Browsers.`;
+      : `Die Datei „${name}“ wurde heruntergeladen. Sie liegt im Download-Ordner des Browsers.`;
     aktualisiereBanner();
     return true;
   }
 
-  async function ersetze(pruefung, name) {
+  async function ersetze(pruefung, name, behalteFotosFeld = null) {
     const jetztDaten = zusammenfassung(speicher);
     const neu = pruefung.zusammenfassung;
     const frage = `Alle aktuellen Daten ersetzen?\n\nJetzt in der App: ${jetztDaten.raeume} Räume, ${jetztDaten.raumflaechen} Raumflächen, ${jetztDaten.heizkoerper} Heizkörper.\n`
       + `Aus der Datei: ${neu.raeume} Räume, ${neu.raumflaechen} Raumflächen, ${neu.heizkoerper} Heizkörper.\n\n`
       + 'Das lässt sich nicht rückgängig machen.';
-    if (!confirm(frage)) return;
+    const dateiHatFotos = neu.fotos > 0 || neu.hintergruende > 0;
+    const behalteFotos = !dateiHatFotos && Boolean(behalteFotosFeld?.checked);
+    const fotoText = dateiHatFotos
+      ? `Die Fotos und Baupläne der App werden durch die ${neu.fotos} Foto(s) und ${neu.hintergruende} Bauplan/Baupläne aus der Datei ersetzt.\n\n`
+      : behalteFotos ? 'Die vorhandenen Fotos, Markierungen und Baupläne bleiben erhalten.\n\n'
+        : (fotoStand.fotos + fotoStand.hintergruende > 0 ? `ACHTUNG: Die ${fotoStand.fotos} vorhandenen Fotos und ${fotoStand.hintergruende} Bauplan/Baupläne werden gelöscht.\n\n` : '');
+    if (!confirm(`${frage}\n\n${fotoText}`.trim())) return;
     const eintrag = { zeit: pruefung.exportiertAm ?? new Date().toISOString(), art: 'import', dateiname: name };
     try {
-      await db.ersetzeAlles(pruefung.daten, eintrag);
+      const daten = dateiHatFotos ? dateiFotosZuBlobs(pruefung.daten).speicher : pruefung.daten;
+      await db.ersetzeAlles(daten, eintrag, { behalteFotos });
     } catch (fehler) {
       ersetzeKinder(vorschau, el('p', { class: 'meldung fehler' }, `Der Import ist fehlgeschlagen, die bisherigen Daten sind unverändert: ${fehler.message}`));
       return;
@@ -116,6 +128,23 @@ export async function renderSicherung(container) {
     );
     zeigeStatus(eintrag);
     aktualisiereBanner();
+  }
+
+  // Fotos in der Datei und in der App. Hat die Datei keine Fotos, lassen sich die vorhandenen auf Wunsch behalten.
+  let behalteFeld = null;
+  function fotoBlock(pruefung) {
+    const info = pruefung.fotoInfo;
+    behalteFeld = null;
+    if (info.fotos + info.hintergruende > 0) {
+      return el('p', { class: 'zeile' }, `Die Datei enthält ${info.fotos} Foto(s) und ${info.hintergruende} Bauplan/Baupläne (ca. ${bytesText(info.bytes)}). Sie ersetzen die Fotos und Baupläne in der App.`);
+    }
+    if (fotoStand.fotos + fotoStand.hintergruende === 0) return el('p', { class: 'zeile' }, 'Die Datei enthält keine Fotos. In der App gibt es auch keine.');
+    behalteFeld = el('input', { type: 'checkbox', checked: true, 'aria-label': 'Vorhandene Fotos behalten' });
+    return el(
+      'label', { class: 'behalten' },
+      behalteFeld,
+      ` Die Datei enthält keine Fotos. Die ${fotoStand.fotos} vorhandenen Fotos, ihre Markierungen und ${fotoStand.hintergruende} Bauplan/Baupläne (${bytesText(fotoStand.bytes)}) behalten. Ohne Haken werden sie gelöscht.`,
+    );
   }
 
   function zeigeVorschau(pruefung, name) {
@@ -143,6 +172,7 @@ export async function renderSicherung(container) {
           el('strong', {}, 'Achtung: '),
           'Beim Import werden alle aktuellen Daten ersetzt. Das lässt sich nicht rückgängig machen. Sichere die aktuellen Daten vorher.',
         ),
+        fotoBlock(pruefung),
         begrenzteListe('Verweise ohne Ziel', pruefung.verweise),
         begrenzteListe(
           'Einträge mit Hinweisen (werden importiert und markiert)',
@@ -150,11 +180,45 @@ export async function renderSicherung(container) {
         ),
         el(
           'div', { class: 'knopfzeile' },
-          el('button', { type: 'button', onClick: sichere }, 'Aktuelle Daten zuerst sichern'),
-          el('button', { type: 'button', class: 'gefahr', onClick: () => ersetze(pruefung, name) }, 'Daten ersetzen'),
+          el('button', { type: 'button', onClick: () => sichere() }, 'Aktuelle Daten zuerst sichern'),
+          el('button', { type: 'button', class: 'gefahr', onClick: () => ersetze(pruefung, name, behalteFeld) }, 'Daten ersetzen'),
           el('button', { type: 'button', onClick: () => ersetzeKinder(vorschau) }, 'Abbrechen'),
         ),
       ),
+    );
+  }
+
+  // Export mit Fotos: Die Datei wird zuerst gebaut (mit Fortschritt), danach folgt ein eigener Tipp zum Sichern, denn das
+  // Teilen-Menü verlangt, dass es unmittelbar auf einen Tipp folgt.
+  function fotoExportBlock() {
+    if (fotoStand.fotos + fotoStand.hintergruende === 0) return el('p', { class: 'zeile' }, 'Es gibt noch keine Fotos oder Baupläne in der App.');
+    const fortschritt = el('p', { class: 'zeile', 'aria-live': 'polite' });
+    const bereit = el('div', { class: 'knopfzeile' });
+    const erstellen = el('button', {
+      type: 'button',
+      onClick: async () => {
+        erstellen.disabled = true;
+        ersetzeKinder(bereit);
+        try {
+          const blob = await baueExportBlob(speicher, new Date(), { mitFotos: true, fortschritt: (i, n) => { fortschritt.textContent = `Bild ${i} von ${n} wird eingepackt …`; } });
+          const dateiMit = new File([blob], dateinameMitFotos, { type: 'application/json' });
+          fortschritt.textContent = `Die Datei ist fertig (${bytesText(dateiMit.size)}).`;
+          ersetzeKinder(bereit, el('button', { type: 'button', class: 'primaer', onClick: () => sichere(dateiMit, dateinameMitFotos) }, `„${dateinameMitFotos}“ sichern (${bytesText(dateiMit.size)})`));
+        } catch (fehler) {
+          fortschritt.className = 'meldung fehler';
+          fortschritt.textContent = `Die Datei lässt sich nicht erstellen: ${fehler.message}`;
+        } finally {
+          erstellen.disabled = false;
+        }
+      },
+    }, 'Sicherung mit Fotos erstellen');
+    return el(
+      'div', { class: 'fotoexport' },
+      el('p', { class: 'zeile' }, `Fotos und Baupläne: ${fotoStand.fotos} Foto(s), ${fotoStand.hintergruende} Bauplan/Baupläne, ${bytesText(fotoStand.bytes)} im Speicher.`),
+      el('p', { class: 'zeile' }, `Größe der Sicherungsdatei: ohne Fotos etwa ${bytesText(groesse.ohne)}, mit Fotos etwa ${bytesText(groesse.mit)}.`),
+      el('div', { class: 'knopfzeile' }, erstellen),
+      fortschritt,
+      bereit,
     );
   }
 
@@ -181,7 +245,8 @@ export async function renderSicherung(container) {
       'section', { class: 'karte abstand', 'data-lesen': true },
       el('h3', {}, 'Sicherung exportieren'),
       el('p', { class: 'zeile' }, `Jetzt in der App: ${aktuell.raeume} Räume, ${aktuell.raumflaechen} Raumflächen, ${aktuell.heizkoerper} Heizkörper, ${aktuell.verbrauch} Verbrauchsabgleiche.`),
-      el('div', { class: 'knopfzeile' }, el('button', { type: 'button', class: 'primaer', onClick: sichere }, 'Sicherungsdatei exportieren')),
+      fotoExportBlock(),
+      el('div', { class: 'knopfzeile' }, el('button', { type: 'button', class: 'primaer', onClick: () => sichere() }, 'Sicherungsdatei exportieren (ohne Fotos)')),
       exportRueckmeldung,
       el('p', { class: 'hinweis' }, `Dateiname: ${dateiname}. Auf dem iPad öffnet sich das Teilen-Menü: „In Dateien sichern“ wählen.`),
     ),
