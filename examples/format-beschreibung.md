@@ -213,7 +213,6 @@ nie verändert. Fehlende Teile ergänzt die App beim Import mit Leerwerten.
 |---|---|
 | `id`, `name`, `beschreibung`, `erstelltAm` | Kennung (Pflicht), Name, Text, Zeitpunkt (ISO) |
 | `abweichungen.bauteile` | `{ "<bauteilId>": { "name": "Flachdach", "u": { "min": 0.2, "max": 0.2 } } }` überschreibt den U-Wert |
-| `abweichungen.flaechenBauteil` | `{ "<raumflaechenId>": { "name": "Raum A: Flachdach", "bauteilId": "<bauteilId>", "bauteilName": "Flachdach saniert" } }` weist **einer einzelnen Raumfläche** ein anderes Bauteil aus dem Katalog zu; andere Flächen mit dem bisherigen Bauteil bleiben unverändert |
 | `abweichungen.oeffnungstypen` | `{ "<typId>": { "name": "...", "uw": 1.0 } }` überschreibt den Uw-Wert |
 | `abweichungen.heizkoerperStatus` | `{ "<heizkoerperId>": { "name": "...", "status": "entfaellt" } }`, Status wie bei den Heizkörpern |
 | `abweichungen.neueHeizkoerper` | Liste vollständiger Heizkörper wie in `heizkoerper` (mit `id`, `raumId`, Normbedingungen oder Kennlinie), die nur in diesem Szenario existieren; zusätzlich `name` |

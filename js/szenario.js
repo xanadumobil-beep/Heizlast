@@ -9,7 +9,6 @@
 //   abweichungen: {
 //     bauteile:            { [bauteilId]:    { name, u: { min, max } } },        U-Wert-Spanne in W/(m²K)
 //     oeffnungstypen:      { [typId]:        { name, uw } },                     Uw in W/(m²K)
-//     flaechenBauteil:     { [flaecheId]:    { name, bauteilId, bauteilName } },  einer Raumfläche ein anderes Bauteil zuweisen
 //     heizkoerperStatus:   { [heizkoerperId]: { name, status } },                bleibt | entfaellt | neu | geplant
 //     neueHeizkoerper:     [ { id, raumId, bauart, ... } ],                      nur in diesem Szenario vorhanden
 //     raumTemperatur:      { [raumId]:       { name, theta } },                  Soll-Temperatur in °C
@@ -34,7 +33,6 @@ const bereichText = (b) => (b.min === b.max ? z(b.min) : `${z(b.min)} – ${z(b.
 
 export const leereAbweichungen = () => ({
   bauteile: {},
-  flaechenBauteil: {},
   oeffnungstypen: {},
   heizkoerperStatus: {},
   neueHeizkoerper: [],
@@ -59,7 +57,6 @@ export function normalisiereSzenario(roh) {
     erstelltAm: typeof roh?.erstelltAm === 'string' ? roh.erstelltAm : null,
     abweichungen: {
       bauteile: objekt(a.bauteile),
-      flaechenBauteil: objekt(a.flaechenBauteil),
       oeffnungstypen: objekt(a.oeffnungstypen),
       heizkoerperStatus: objekt(a.heizkoerperStatus),
       neueHeizkoerper: Array.isArray(a.neueHeizkoerper) ? a.neueHeizkoerper : [],
@@ -97,11 +94,6 @@ export function wendeSzenarioAn(ist, szenario) {
 
   const bauteileIds = new Set(ist.bauteile.map((b) => b.id));
   for (const [id, ov] of Object.entries(a.bauteile)) if (!bauteileIds.has(id)) fehlt('bauteil_fehlt', id, ov.name, 'Das Bauteil');
-  const flaechenIds = new Set(ist.flaechen.map((f) => f.id));
-  for (const [id, ov] of Object.entries(a.flaechenBauteil)) {
-    if (!flaechenIds.has(id)) fehlt('flaeche_fehlt', id, ov.name, 'Die Raumfläche');
-    else if (!bauteileIds.has(ov.bauteilId)) fehlt('bauteil_fehlt', id, ov.bauteilName, 'Das neue Bauteil');
-  }
   const typIds = new Set(ist.oeffnungstypen.map((t) => t.id));
   for (const [id, ov] of Object.entries(a.oeffnungstypen)) if (!typIds.has(id)) fehlt('oeffnungstyp_fehlt', id, ov.name, 'Der Öffnungstyp');
   const hkIds = new Set(ist.heizkoerper.map((h) => h.id));
@@ -130,7 +122,6 @@ export function wendeSzenarioAn(ist, szenario) {
       ...(istZahl(a.einstellungen.zielVorlauf) ? { zielVorlauf: a.einstellungen.zielVorlauf } : {}),
       ...(istZahl(a.einstellungen.spreizung) ? { spreizung: a.einstellungen.spreizung } : {}),
     },
-    flaechen: ist.flaechen.map((f) => (bauteileIds.has(a.flaechenBauteil[f.id]?.bauteilId) ? { ...f, bauteilId: a.flaechenBauteil[f.id].bauteilId } : f)),
     bauteile: ist.bauteile.map((b) => (bereichOk(a.bauteile[b.id]?.u) ? { ...b, u: { min: a.bauteile[b.id].u.min, max: a.bauteile[b.id].u.max } } : b)),
     oeffnungstypen: ist.oeffnungstypen.map((t) => (istZahl(a.oeffnungstypen[t.id]?.uw) ? { ...t, uw: a.oeffnungstypen[t.id].uw } : t)),
     raeume: ist.raeume.map((r) => {
@@ -164,18 +155,6 @@ export function beschreibeAbweichungen(ist, szenario) {
   for (const [id, ov] of Object.entries(a.bauteile)) {
     const b = ist.bauteile.find((x) => x.id === id);
     zeilen.push({ bereich: 'Bauteil (U-Wert)', schluessel: { typ: 'bauteile', id }, ziel: b?.name ?? ov.name ?? id, ist: b ? uText(b.u) : fehlend, szenario: bereichOk(ov.u) ? uText(ov.u) : 'ungültig', hinweis: b ? null : hinweisFehlt('Das Bauteil') });
-  }
-  for (const [id, ov] of Object.entries(a.flaechenBauteil)) {
-    const f = ist.flaechen.find((x) => x.id === id);
-    const alt = f ? ist.bauteile.find((b) => b.id === f.bauteilId) : null;
-    const neu = ist.bauteile.find((b) => b.id === ov.bauteilId);
-    const text = (b) => (b ? `${b.name} (U ${bereichText(b.u)})` : fehlend);
-    const ziel = f ? `${raumName(f.raumId) ?? 'Raum fehlt'}: ${f.name || alt?.name || 'Fläche'}` : (ov.name ?? id);
-    zeilen.push({
-      bereich: 'Fläche (Bauteil tauschen)', schluessel: { typ: 'flaechenBauteil', id }, ziel,
-      ist: f ? text(alt) : fehlend, szenario: neu ? text(neu) : `${ov.bauteilName ?? 'Bauteil'} (${fehlend})`,
-      hinweis: !f ? hinweisFehlt('Die Raumfläche') : (neu ? null : hinweisFehlt('Das neue Bauteil')),
-    });
   }
   for (const [id, ov] of Object.entries(a.oeffnungstypen)) {
     const t = ist.oeffnungstypen.find((x) => x.id === id);
@@ -220,9 +199,6 @@ export function validiereSzenario(szenario) {
   for (const [id, ov] of Object.entries(a.bauteile)) {
     meldungen.push(...pruefeBereich(`bauteile.${id}`, ov.u, { name: `U-Wert „${ov.name ?? id}“`, einheit: 'W/(m²K)', fehlerWennKleinerGleich: 0, warnWennUeber: 6, warnWennUnter: 0.05 }));
   }
-  for (const [id, ov] of Object.entries(a.flaechenBauteil)) {
-    if (typeof ov.bauteilId !== 'string' || ov.bauteilId === '') meldungen.push(fehlerMeldung(`flaechenBauteil.${id}`, `Fläche „${ov.name ?? id}“: bitte ein Bauteil wählen.`));
-  }
   for (const [id, ov] of Object.entries(a.oeffnungstypen)) {
     meldungen.push(...pruefeZahl(`oeffnungstypen.${id}`, ov.uw, { name: `Uw „${ov.name ?? id}“`, einheit: 'W/(m²K)', fehlerWennKleinerGleich: 0, warnWennUeber: 6, warnWennUnter: 0.3 }));
   }
@@ -253,7 +229,7 @@ export function validiereSzenario(szenario) {
 // Zahl der Abweichungen (für Listen).
 export function zaehleAbweichungen(szenario) {
   const a = normalisiereSzenario(szenario).abweichungen;
-  return Object.keys(a.bauteile).length + Object.keys(a.flaechenBauteil).length + Object.keys(a.oeffnungstypen).length + Object.keys(a.heizkoerperStatus).length
+  return Object.keys(a.bauteile).length + Object.keys(a.oeffnungstypen).length + Object.keys(a.heizkoerperStatus).length
     + a.neueHeizkoerper.length + Object.keys(a.raumTemperatur).length + (a.luftwechselStandard ? 1 : 0)
     + Object.keys(a.luftwechselRaum).length + Object.keys(a.einstellungen).length;
 }
