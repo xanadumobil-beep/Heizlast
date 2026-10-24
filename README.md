@@ -20,7 +20,7 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
   gestrichelte Kästen im gewählten Geschoss. Antippen eines Raums zeigt seine Linien zu den Randsymbolen und alle seine Flächen
   mit Verlust. Kästen lassen sich per Finger verschieben, die Positionen stehen in der Sicherungsdatei. Auffälligkeiten und
   eine Vollständigkeitsprüfung je Raum stehen direkt im Plan und im Bericht.
-- **Szenarien:** Der Ist-Zustand sind die normalen Daten und wird nie verändert. Ein Szenario beschreibt Abweichungen (U-Werte,
+- **Szenarien:** Der Ist-Zustand sind die normalen Daten und wird nie verändert. Ein Szenario beschreibt Abweichungen (U-Werte, Bauteil einzelner Raumflächen tauschen,
   Fenster-Uw, Heizkörper-Status und zusätzliche Heizkörper, Soll-Temperaturen, Luftwechsel, Ziel-Vorlauf und Spreizung). Oben wählst
   du die Ansicht: Ist-Zustand oder ein Szenario. Bei aktivem Szenario zeigen Räume, Plan, Vorlauf und Bericht dessen Werte, und die
   Bestandsdaten sind schreibgeschützt. Der Tab „Szenarien“ vergleicht alle Szenarien mit dem Ist-Zustand (Heizlast, Minderung,

@@ -11,7 +11,9 @@ import {
 } from '../szenario.js';
 import { baueVergleich, vergleichTabellen } from '../vergleich.js';
 import { hatFehler, hatWarnungen, validiereHeizkoerper } from '../validate.js';
-import { parseKennlinie, kennlinieZuText } from '../modell.js';
+import { parseKennlinie, kennlinieZuText, flaecheAusMassen } from '../modell.js';
+import { flaechenBezeichnung } from '../anzeige.js';
+import { formatZahl } from '../engine/format.js';
 import {
   label, BAUARTEN_HK, HK_STATI, VENTILE, werte, neuerHeizkoerper, heizkoerperFelder, normWahlVon,
 } from '../schemas.js';
@@ -241,6 +243,75 @@ async function renderEditor(container, id) {
     );
   }
 
+  // Einzelnen Raumflächen ein anderes Bauteil aus dem Katalog zuweisen.
+  function flaechenAbschnitt() {
+    const bauteilOpt = ist.bauteile.map((b) => ({ wert: b.id, label: `${b.name} (U ${bereichText(b.u)})` }));
+    const bauteilText = (id2) => { const b = ist.bauteile.find((x) => x.id === id2); return b ? `${b.name} (U ${bereichText(b.u)})` : null; };
+    const flaechenText = (f) => {
+      const flaeche = flaecheAusMassen(f);
+      return `${raumName(f.raumId) ?? '?'}: ${flaechenBezeichnung(ist, f)}${Number.isFinite(flaeche) ? `, ${formatZahl(flaeche, 2)} m²` : ''}`;
+    };
+
+    const zeilen = Object.entries(a.flaechenBauteil).flatMap(([fid, ov]) => {
+      const f = ist.flaechen.find((x) => x.id === fid);
+      const neuOk = ist.bauteile.some((b) => b.id === ov.bauteilId);
+      const zeile = el(
+        'tr', {},
+        el('th', { scope: 'row' }, f ? flaechenText(f) : (ov.name ?? fid)),
+        el('td', { class: 'ist' }, f ? (bauteilText(f.bauteilId) ?? 'Bauteil fehlt') : '–'),
+        el('td', {}, auswahl(
+          neuOk ? bauteilOpt : [{ wert: ov.bauteilId ?? '', label: `${ov.bauteilName ?? 'Bauteil'} (${fehlt})` }, ...bauteilOpt],
+          ov.bauteilId ?? '',
+          (w) => { ov.bauteilId = w; ov.bauteilName = ist.bauteile.find((b) => b.id === w)?.name ?? ov.bauteilName; geaendert(); zeichne(); },
+          `Bauteil für ${ov.name ?? fid}`,
+        )),
+        el('td', {}, entfernenKnopf(() => { delete a.flaechenBauteil[fid]; geaendert(); zeichne(); })),
+      );
+      const meldung = !f ? `Die Raumfläche „${ov.name ?? fid}“ ${fehlt} im Ist-Zustand, die Abweichung wirkt nicht.`
+        : (neuOk ? null : `Das neue Bauteil „${ov.bauteilName ?? '?'}“ ${fehlt} im Katalog, die Abweichung wirkt nicht.`);
+      return meldung ? [zeile, el('tr', {}, el('td', { class: 'hinweis-zeile', colspan: '4' }, `⚠ ${meldung}`))] : [zeile];
+    });
+
+    // Flächen hinzufügen: nach Raum und Bauteil filtern, damit sich zum Beispiel alle Dachflächen auf einmal aufnehmen lassen.
+    let raumFilter = '';
+    let bauteilFilter = '';
+    const raumWahl = auswahl([{ wert: '', label: 'alle Räume' }, ...ist.raeume.map((r) => ({ wert: r.id, label: r.name }))], '', (w) => { raumFilter = w; }, 'Flächen aus Raum');
+    const bauteilWahl = auswahl([{ wert: '', label: 'alle Bauteile' }, ...ist.bauteile.map((b) => ({ wert: b.id, label: b.name }))], '', (w) => { bauteilFilter = w; }, 'Flächen mit Bauteil');
+    const hinzu = el('button', {
+      type: 'button',
+      onClick: () => {
+        const treffer = ist.flaechen.filter((f) => (!raumFilter || f.raumId === raumFilter) && (!bauteilFilter || f.bauteilId === bauteilFilter) && !a.flaechenBauteil[f.id]);
+        for (const f of treffer) a.flaechenBauteil[f.id] = { name: flaechenText(f), bauteilId: f.bauteilId, bauteilName: ist.bauteile.find((b) => b.id === f.bauteilId)?.name ?? null };
+        geaendert();
+        zeichne();
+      },
+    }, '+ Flächen aufnehmen');
+
+    // Allen aufgeführten Flächen auf einmal dasselbe Bauteil zuweisen.
+    let sammelBauteil = bauteilOpt[0]?.wert ?? '';
+    const sammelWahl = auswahl(bauteilOpt, sammelBauteil, (w) => { sammelBauteil = w; }, 'Bauteil für alle aufgeführten Flächen');
+    const sammel = el('button', {
+      type: 'button',
+      onClick: () => {
+        const b = ist.bauteile.find((x) => x.id === sammelBauteil);
+        if (!b) return;
+        for (const ov of Object.values(a.flaechenBauteil)) { ov.bauteilId = b.id; ov.bauteilName = b.name; }
+        geaendert();
+        zeichne();
+      },
+    }, 'Allen zuweisen');
+
+    return abschnitt(
+      'Flächen: Bauteil tauschen',
+      'Weist einzelnen Raumflächen ein anderes Bauteil aus dem Katalog zu, zum Beispiel nur die Dachflächen bestimmter Räume dem Bauteil „Flachdach saniert“. Andere Flächen mit dem bisherigen Bauteil bleiben unverändert. Steht eine Wand in beiden Räumen, die Fläche in beiden tauschen.',
+      zeilen.length > 0 ? el('div', { class: 'tabellenrahmen' }, el('table', { class: 'tabelle szenario-tabelle' }, el('thead', {}, el('tr', {}, ['Fläche', 'Ist-Zustand', 'Szenario', ''].map((k) => el('th', {}, k)))), el('tbody', {}, zeilen))) : null,
+      zeilen.length > 0 ? el('div', { class: 'knopfzeile' }, sammelWahl, sammel) : null,
+      el('h4', {}, 'Flächen aufnehmen'),
+      el('div', { class: 'knopfzeile' }, raumWahl, bauteilWahl, hinzu),
+      el('p', { class: 'hinweis' }, 'Die aufgenommenen Flächen behalten zunächst ihr bisheriges Bauteil. Wähle in der Zeile das neue Bauteil oder nutze „Allen zuweisen“.'),
+    );
+  }
+
   function oeffnungenAbschnitt() {
     const zeilen = Object.entries(a.oeffnungstypen).flatMap(([tid, ov]) => {
       const t = ist.oeffnungstypen.find((x) => x.id === tid);
@@ -383,7 +454,7 @@ async function renderEditor(container, id) {
   }
 
   function zeichne() {
-    ersetzeKinder(bereiche, bauteileAbschnitt(), oeffnungenAbschnitt(), heizkoerperAbschnitt(), raumAbschnitt(), luftwechselAbschnitt(), einstellungenAbschnitt());
+    ersetzeKinder(bereiche, bauteileAbschnitt(), flaechenAbschnitt(), oeffnungenAbschnitt(), heizkoerperAbschnitt(), raumAbschnitt(), luftwechselAbschnitt(), einstellungenAbschnitt());
   }
 
   const speichernKnopf = el('button', { type: 'button', class: 'primaer' }, 'Speichern');

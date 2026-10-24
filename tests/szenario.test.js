@@ -413,3 +413,102 @@ test('beschreibeAbweichungen: Ist- und Szenario-Wert nebeneinander für alle Art
   wahr(finde('Einstellung', 'Ziel-Vorlauftemperatur').ist === '55 °C' && finde('Einstellung', 'Spreizung Vor-/Rücklauf').szenario === '10 K', 'Einstellungen');
   gleich(zaehleAbweichungen(sz), 8, 0, 'acht Abweichungen');
 });
+
+// --- Fläche: Bauteil tauschen ---------------------------------------------------------------------------
+
+// Zwei Räume, je ein Dach (Bauteil „Flachdach“, U = 1,0), ΔU_WB = 0,10, innen 20 °C, außen −8 °C (ΔT = 28 K), Luftwechsel 0,5 1/h:
+//   Raum A: Dach 10 m², Volumen 25 m³      Raum B: Dach 6 m², Volumen 15 m³
+// Neues Bauteil „Flachdach saniert“ mit U = 0,20, im Szenario nur der Dachfläche von Raum A zugewiesen.
+//   Ist:       A  10 · (1,0 + 0,1) · 28 = 308 W    B  6 · 1,1 · 28 = 184,8 W    Lüftung 0,34 · 0,5 · 25 · 28 = 119 W und 0,34 · 0,5 · 15 · 28 = 71,4 W
+//              Summe = 308 + 184,8 + 119 + 71,4 = 683,2 W, davon Dach 492,8 W
+//   Szenario:  A  10 · (0,2 + 0,1) · 28 =  84 W    B unverändert 184,8 W         Summe = 84 + 184,8 + 119 + 71,4 = 459,2 W, davon Dach 268,8 W
+//   Minderung  = 10 · (1,0 − 0,2) · 28 = 224 W (nur die Fläche in Raum A)
+const mini2 = () => {
+  const p = mini();
+  p.bauteile.push({ id: 'bt-neu', name: 'Flachdach saniert', art: 'dach', u: { min: 0.2, max: 0.2 }, aufbau: '', quelle: 'rechnung' });
+  p.raeume.push({ id: 'r2', name: 'Raum B', geschoss: 'EG', status: 'beheizt', theta: 20, flaeche: 6, hoehe: 2.5, volumenManuell: null, luftwechsel: null, waermeLieferanten: [] });
+  p.raeume[0].name = 'Raum A';
+  p.flaechen.push({ id: 'f2', raumId: 'r2', bauteilId: 'bt-dach', angrenzend: { art: 'aussen' }, modus: 'flaeche', flaeche: 6, oeffnungen: [] });
+  return p;
+};
+const tauschSzenario = () => {
+  const sz = neuesSzenario('t', 'Dach in Raum A saniert');
+  sz.abweichungen.flaechenBauteil.f = { name: 'Raum A: Flachdach, 10,00 m²', bauteilId: 'bt-neu', bauteilName: 'Flachdach saniert' };
+  return sz;
+};
+
+test('Fläche: Bauteil tauschen wirkt nur auf die gewählte Fläche (Minderung 224 W, nur Raum A)', () => {
+  const ist = tiefEinfrieren(mini2());
+  const vorher = JSON.stringify(ist);
+  const { projekt, hinweise } = wendeSzenarioAn(ist, tauschSzenario());
+  wahr(hinweise.length === 0, 'keine Hinweise');
+  wahr(projekt.flaechen.find((f) => f.id === 'f').bauteilId === 'bt-neu' && projekt.flaechen.find((f) => f.id === 'f2').bauteilId === 'bt-dach', 'nur f wird getauscht, f2 behält „Flachdach“');
+  wahr(ist.flaechen.find((f) => f.id === 'f').bauteilId === 'bt-dach' && JSON.stringify(ist) === vorher, 'Ist-Zustand unverändert');
+  const [basis, szen] = baueVergleich(ist, [tauschSzenario()]).spalten;
+  gleich(basis.mittel, 683.2, 1e-9, 'Ist: 308 + 184,8 + 119 + 71,4');
+  gleich(szen.mittel, 459.2, 1e-9, 'Szenario: 84 + 184,8 + 119 + 71,4');
+  gleich(szen.minderungW, 224, 1e-9, 'Minderung 10 · 0,8 · 28');
+  gleich(basis.verluste.dach, 492.8, 1e-9, 'Dach Ist: 308 + 184,8');
+  gleich(szen.verluste.dach, 268.8, 1e-9, 'Dach Szenario: 84 + 184,8');
+  const raum = (sp, id) => sp.ergebnis.raeume.find((r) => r.id === id).mittel.heizlast;
+  gleich(raum(basis, 'r') - raum(szen, 'r'), 224, 1e-9, 'Raum A mindert um 224 W');
+  gleich(raum(basis, 'r2'), raum(szen, 'r2'), 1e-9, 'Raum B unverändert');
+  gleich(heizlastMittel(wendeSzenarioAn(ist, tauschSzenario()).projekt), 459.2, 1e-9, 'Rechnung über die angewendete Kopie');
+});
+
+test('Fläche: tauschen auf ein Bauteil anderer Art verschiebt den Verlust in die passende Verlustart', () => {
+  const ist = mini2();
+  ist.bauteile.push({ id: 'bt-wand', name: 'Außenwand', art: 'aussenwand', u: { min: 1, max: 1 }, aufbau: '', quelle: 'schaetzung' });
+  const sz = neuesSzenario('w', 'Dach als Wand');
+  sz.abweichungen.flaechenBauteil.f2 = { name: 'Raum B: Flachdach', bauteilId: 'bt-wand', bauteilName: 'Außenwand' };
+  const [basis, szen] = baueVergleich(ist, [sz]).spalten;
+  gleich(basis.verluste.dach, 492.8, 1e-9, 'Ist: beide Dachflächen');
+  gleich(szen.verluste.dach, 308, 1e-9, 'Szenario: nur noch Raum A als Dach');
+  gleich(szen.verluste.aussenwand, 184.8, 1e-9, 'Raum B zählt nun als Außenwand: 6 · 1,1 · 28');
+  gleich(szen.mittel, basis.mittel, 1e-9, 'gleiches U, gleiche Heizlast');
+});
+
+test('Fläche: gelöschte Fläche oder gelöschtes Bauteil erzeugt einen Hinweis, die Abweichung wirkt nicht', () => {
+  const sz = tauschSzenario();
+  const ohneFlaeche = { ...mini2(), flaechen: mini2().flaechen.filter((f) => f.id !== 'f') };
+  const a = wendeSzenarioAn(ohneFlaeche, sz);
+  wahr(a.hinweise.length === 1 && a.hinweise[0].art === 'flaeche_fehlt' && a.hinweise[0].text.includes('„Raum A: Flachdach, 10,00 m²“'), JSON.stringify(a.hinweise));
+  wahr(!a.projekt.flaechen.some((f) => f.id === 'f'), 'die gelöschte Fläche taucht nicht wieder auf');
+
+  const ohneBauteil = { ...mini2(), bauteile: mini2().bauteile.filter((b) => b.id !== 'bt-neu') };
+  const b = wendeSzenarioAn(ohneBauteil, sz);
+  wahr(b.hinweise.length === 1 && b.hinweise[0].art === 'bauteil_fehlt' && b.hinweise[0].text.includes('„Flachdach saniert“'), JSON.stringify(b.hinweise));
+  wahr(b.projekt.flaechen.find((f) => f.id === 'f').bauteilId === 'bt-dach', 'die Fläche behält ihr Bauteil');
+  gleich(heizlastMittel(b.projekt), heizlastMittel(ohneBauteil), 1e-9, 'gleiche Heizlast wie im Ist-Zustand');
+
+  const zeileA = beschreibeAbweichungen(ohneFlaeche, sz)[0];
+  wahr(zeileA.hinweis !== null && zeileA.ist === 'nicht mehr vorhanden' && zeileA.ziel.includes('Raum A: Flachdach'), 'Editor: Hinweis bei gelöschter Fläche');
+  const zeileB = beschreibeAbweichungen(ohneBauteil, sz)[0];
+  wahr(zeileB.hinweis !== null && zeileB.szenario.includes('Flachdach saniert') && zeileB.szenario.includes('nicht mehr vorhanden'), `Editor: Hinweis bei gelöschtem Bauteil: ${zeileB.szenario}`);
+  const v = baueVergleich(ohneBauteil, [sz]);
+  wahr(v.spalten[1].szenarioHinweise.length === 1, 'Hinweis im Vergleich');
+});
+
+test('Fläche: Ist- und Szenario-Wert nebeneinander, Zählung, Prüfung, Export und Import', () => {
+  const ist = mini2();
+  const sz = tauschSzenario();
+  const z = beschreibeAbweichungen(ist, sz)[0];
+  wahr(z.bereich === 'Fläche (Bauteil tauschen)' && z.ziel === 'Raum A: Flachdach' && z.ist === 'Flachdach (U 1)' && z.szenario === 'Flachdach saniert (U 0,2)' && z.hinweis === null, JSON.stringify(z));
+  gleich(zaehleAbweichungen(sz), 1, 0, 'eine Abweichung');
+  const leer = neuesSzenario('x', 'Leer');
+  leer.abweichungen.flaechenBauteil.f = { name: 'Raum A: Flachdach', bauteilId: '', bauteilName: null };
+  wahr(validiereSzenario(leer).some((m) => m.stufe === 'fehler' && m.feld === 'flaechenBauteil.f'), 'ohne Bauteil: Fehler');
+  wahr(validiereSzenario(sz).length === 0, 'gültig');
+  const k = kopiereSzenario(sz, zaehler);
+  k.abweichungen.flaechenBauteil.f.bauteilId = 'bt-dach';
+  wahr(sz.abweichungen.flaechenBauteil.f.bauteilId === 'bt-neu', 'Kopie ist unabhängig');
+  wahr(normalisiereSzenario({ id: 'a' }).abweichungen.flaechenBauteil !== undefined, 'alte Szenarien ohne dieses Feld werden ergänzt');
+  const datei = baueExport({ settings: [ist.einstellungen], zones: [], components: ist.bauteile, openingTypes: [], rooms: ist.raeume, surfaces: ist.flaechen, radiators: [], consumption: [], scenarios: [sz] }, jetzt);
+  const zurueck = pruefeImport(JSON.stringify(datei));
+  wahr(zurueck.ok && zurueck.daten.scenarios[0].abweichungen.flaechenBauteil.f.bauteilId === 'bt-neu', 'Export und Import erhalten die Abweichung');
+  wahr(zurueck.verweise.length === 0, 'keine Verweisprobleme');
+  const ohneFlaeche = JSON.parse(JSON.stringify(datei));
+  ohneFlaeche.daten.raumflaechen = ohneFlaeche.daten.raumflaechen.filter((f) => f.id !== 'f');
+  const verwaist = pruefeImport(JSON.stringify(ohneFlaeche));
+  wahr(verwaist.verweise.some((h) => h.includes('Szenario „Dach in Raum A saniert“') && h.includes('Raumfläche')), `Verweise: ${verwaist.verweise.join(' | ')}`);
+});
