@@ -33,8 +33,9 @@ main { max-width: none; margin: 0; padding: 0; }
   font-size: 12pt;
   border-bottom: 1pt solid #000;
   break-after: avoid;
+  page-break-after: avoid;
 }
-.b-zwischentitel { margin: 9pt 0 3pt; font-size: 10.5pt; break-after: avoid; }
+.b-zwischentitel { margin: 9pt 0 3pt; font-size: 10.5pt; break-after: avoid; page-break-after: avoid; }
 .b-paare dt { color: #000; }
 .b-paare { grid-template-columns: 62mm 1fr; }
 
