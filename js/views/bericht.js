@@ -82,6 +82,7 @@ export async function renderBericht(container) {
           el('li', {}, 'Tippe auf „Drucken / als PDF sichern“. Es erscheint die Druckansicht mit einer Vorschau.'),
           el('li', {}, 'Zieh mit zwei Fingern auf der Vorschau auseinander. Dann öffnet sich die Seite als PDF.'),
           el('li', {}, 'Tippe auf das Teilen-Symbol und wähle „In Dateien sichern“, zum Beispiel in iCloud Drive.'),
+          el('li', {}, 'Kopf- und Fußzeile (Adresse, Datum, „Seite x von y“) und den Dateinamen setzt iOS selbst. Beim Sichern in Dateien kannst du die Datei umbenennen.'),
           el('li', {}, 'Passiert nach dem ersten Schritt nichts (das kommt bei Web-Apps vom Home-Bildschirm vor): Öffne die Seite in Safari, tippe dort auf Teilen und wähle „Drucken“.'),
         ),
       ),

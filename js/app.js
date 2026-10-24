@@ -69,4 +69,21 @@ async function start() {
   await zeigeTab();
 }
 
+// Offline-Betrieb: Service Worker anmelden. Kommt eine neue Version, bietet die App das Neuladen an.
+function registriereServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  const hatteSteuerung = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hatteSteuerung) return;
+    const hinweis = document.getElementById('update');
+    hinweis.replaceChildren(
+      el('p', {}, 'Eine neue Version der App ist bereit.'),
+      el('button', { type: 'button', onClick: () => location.reload() }, 'Jetzt neu laden'),
+    );
+    hinweis.hidden = false;
+  });
+  navigator.serviceWorker.register('sw.js').catch(() => { /* ohne Service Worker läuft die App online weiter */ });
+}
+
+registriereServiceWorker();
 start();

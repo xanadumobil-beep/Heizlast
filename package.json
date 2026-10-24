@@ -5,6 +5,7 @@
   "description": "Raumweise Heizlastberechnung (PWA, ohne Build-Schritt)",
   "type": "module",
   "scripts": {
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "sw": "node tools/sw-aktualisieren.js"
   }
 }
