@@ -12,8 +12,8 @@ import { rechne, bewerteVorlauf } from './daten.js';
 import { raumVolumen, nettoFlaeche, flaecheAusMassen, oeffnungsGesamtflaeche } from './modell.js';
 import { datumText, inhaltsHinweise } from './io.js';
 import { baueplan, pruefZeilen } from './plan.js';
-import { baueVergleich, vergleichTabellen } from './vergleich.js';
-import { szenarioInfo } from './szenario.js';
+import { baueVergleich, vergleichTabellen, bandText } from './vergleich.js';
+import { szenarioInfo, kostenNachFoerderung, kostenEingetragen } from './szenario.js';
 import {
   watt, wattBereich, wattBereichVon, mitVorzeichen, raumName, flaechenBezeichnung, angrenzendText, massText,
   meldungsTexte, berechneteBandbreite, auswerten, abweichungsText, FEHLER_TEXT, vorlaufText, hinweisText,
@@ -32,7 +32,7 @@ const zwischentitel = (t) => ({ art: 'zwischentitel', text: t });
 const liste = (eintraege) => ({ art: 'liste', eintraege });
 const paare = (zeilen) => ({ art: 'paare', zeilen });
 // ausrichtung: ein Buchstabe je Spalte, l = links, r = rechts
-const tabelle = (kopf, zeilen, ausrichtung, summenzeile = false) => ({ art: 'tabelle', kopf, zeilen, ausrichtung, summenzeile });
+const tabelle = (kopf, zeilen, ausrichtung, summenzeile = false, hervor = []) => ({ art: 'tabelle', kopf, zeilen, ausrichtung, summenzeile, hervor });
 
 const nachName = (a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'de');
 
@@ -374,6 +374,15 @@ function hinweiseAbschnitt(ctx) {
 function abweichungsBloecke(info) {
   const bloecke = [];
   if (info.beschreibung) bloecke.push(text(info.beschreibung));
+  if (info.kosten && (kostenEingetragen(info.kosten.investition) || kostenEingetragen(info.kosten.foerderung))) {
+    const nach = kostenNachFoerderung(info.kosten);
+    bloecke.push(paare([
+      ['Investitionskosten', kostenEingetragen(info.kosten.investition) ? bandText(info.kosten.investition, 0, '€') : 'nicht angegeben'],
+      ['Förderung', kostenEingetragen(info.kosten.foerderung) ? bandText(info.kosten.foerderung, 0, '€') : 'nicht angegeben'],
+      ['Kosten nach Förderung', nach ? bandText(nach, 0, '€') : '–'],
+      ['Quelle der Kosten', info.kosten.quelle || 'nicht angegeben'],
+    ]));
+  }
   bloecke.push(info.zeilen.length === 0
     ? text('Keine Abweichungen: Das Szenario entspricht dem Ist-Zustand.')
     : tabelle(['Bereich', 'Ziel', 'Ist-Zustand', 'Szenario'], info.zeilen.map((r) => [r.bereich, r.hinweis ? `${r.ziel} (Ziel fehlt im Ist-Zustand)` : r.ziel, r.ist, r.szenario]), 'llll'));
@@ -438,7 +447,7 @@ export function baueVergleichsBericht(ist, szenarien, jetzt = new Date()) {
   const e = ist.einstellungen;
   const vergleich = baueVergleich(ist, szenarien);
   const t = vergleichTabellen(vergleich);
-  const tab = (x) => tabelle(x.kopf, x.zeilen, x.ausrichtung, Boolean(x.summenzeile));
+  const tab = (x) => tabelle(x.kopf, x.zeilen, x.ausrichtung, Boolean(x.summenzeile), x.hervor ?? []);
   const hinweise = vergleich.spalten.filter((sp) => sp.szenarioHinweise.length > 0);
 
   const abschnitte = [
@@ -449,6 +458,10 @@ export function baueVergleichsBericht(ist, szenarien, jetzt = new Date()) {
           + 'Die Minderung bezieht sich auf den Mittelwert, die Vorlauftemperatur des Hauses auf die ungünstige Heizlast.'),
         ...(szenarien.length === 0 ? [text('Es gibt noch keine Szenarien.')] : [
           tab(t.kennzahlen),
+          zwischentitel('Jahreswärme-Differenz gegenüber dem Ist-Zustand'),
+          box(t.jahreswaerme.hinweis),
+          tab(t.jahreswaerme),
+          liste(t.jahreswaerme.annahmen),
           ...(hinweise.length > 0 ? [box(`Abweichungen ohne Wirkung: ${hinweise.map((sp) => `${sp.name}: ${sp.szenarioHinweise.map((h) => h.text).join(' ')}`).join(' ')}`, 'fehler')] : []),
         ]),
       ],

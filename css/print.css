@@ -73,3 +73,5 @@ a { color: inherit; text-decoration: none; }
   --pl-nachbar: #8e44ad; --pl-unbeh-zone: #4f8a8b; --pl-raum: #2e8b57; --pl-passivlinie: #d98a00; --pl-warn: #d32f2f;
   --ok: #17703a; --warnung: #8a5a00; --fehler: #b3261e; --pl-markentext: #fff; --pl-zone: #dcecec; }
 .plan-legende { break-inside: avoid; }
+
+.b-tabelle tr.hervor th, .b-tabelle tr.hervor td { background: #d9d9d9 !important; color: #000; font-weight: 800; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

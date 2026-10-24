@@ -7,9 +7,11 @@ import { oeffneDialog } from '../dialog.js';
 import { parseDezimal, zahlZuText } from '../engine/format.js';
 import { ladeIstProjekt, ladeSzenarien, ladeAktivesSzenario, setzeAktivesSzenario } from '../daten.js';
 import {
-  neuesSzenario, kopiereSzenario, normalisiereSzenario, beschreibeAbweichungen, validiereSzenario, zaehleAbweichungen, wendeSzenarioAn,
+  kostenNachFoerderung, neuesSzenario, kopiereSzenario, normalisiereSzenario, beschreibeAbweichungen, validiereSzenario, zaehleAbweichungen, wendeSzenarioAn,
 } from '../szenario.js';
-import { baueVergleich, vergleichTabellen } from '../vergleich.js';
+import { baueVergleich, vergleichTabellen, bandText } from '../vergleich.js';
+import { vergleichsannahmen, loeseGradtageAuf, JAHRESHINWEIS } from '../jahreswaerme.js';
+import { mittlereInnentemperatur } from '../modell.js';
 import { hatFehler, hatWarnungen, validiereHeizkoerper } from '../validate.js';
 import { parseKennlinie, kennlinieZuText } from '../modell.js';
 import {
@@ -22,14 +24,14 @@ const bereichText = (b) => (b.min === b.max ? zahlZuText(b.min) : `${zahlZuText(
 
 // --- Bausteine -------------------------------------------------------------------------------
 
-function tabelle({ kopf, zeilen, ausrichtung = '', summenzeile = false }) {
+function tabelle({ kopf, zeilen, ausrichtung = '', summenzeile = false, hervor = [] }) {
   return el(
     'div', { class: 'tabellenrahmen' },
     el(
       'table', { class: 'tabelle vergleich-tabelle' },
       el('thead', {}, el('tr', {}, kopf.map((k) => el('th', { scope: 'col' }, k)))),
       el('tbody', {}, zeilen.map((zeile, r) => el(
-        'tr', { class: summenzeile && r === zeilen.length - 1 ? 'summe' : '' },
+        'tr', { class: `${summenzeile && r === zeilen.length - 1 ? 'summe' : ''}${hervor.includes(r) ? ' hervor' : ''}` },
         zeile.map((zelle, i) => el(i === 0 ? 'th' : 'td', { class: ausrichtung[i] === 'r' ? 'zahl' : '', scope: i === 0 ? 'row' : undefined }, zelle)),
       ))),
     ),
@@ -73,6 +75,9 @@ function szenarioKarte(ist, szenario, aktiv, neuLaden) {
     el('h3', {}, szenario.name, istAktiv ? el('span', { class: 'marke' }, 'aktiv') : null),
     szenario.beschreibung ? el('p', { class: 'zeile' }, szenario.beschreibung) : null,
     el('p', { class: 'zeile' }, `${anzahl} Abweichung${anzahl === 1 ? '' : 'en'} gegenüber dem Ist-Zustand${hinweise.length > 0 ? `, ⚠ ${hinweise.length} ohne Ziel im Ist-Zustand` : ''}`),
+    kostenNachFoerderung(szenario.kosten)
+      ? el('p', { class: 'zeile' }, `Kosten nach Förderung: ${bandText(kostenNachFoerderung(szenario.kosten), 0, '€')}${szenario.kosten.quelle ? ` (${szenario.kosten.quelle})` : ''}`)
+      : null,
     el('details', {}, el('summary', {}, 'Abweichungen anzeigen'), abweichungenListe(ist, szenario)),
     el(
       'div', { class: 'knopfzeile' },
@@ -110,6 +115,65 @@ function szenarioKarte(ist, szenario, aktiv, neuLaden) {
   );
 }
 
+// Annahmen für die Jahreswärme-Differenz: Gradtagzahl, Jahresarbeitszahl, Strompreis. Sie gehören nicht zu den Bestandsdaten
+// und bleiben deshalb auch bei aktivem Szenario bearbeitbar.
+function annahmenKarte(ist, neuLaden) {
+  const a = vergleichsannahmen(ist.einstellungen);
+  const thetaMittel = mittlereInnentemperatur(ist.raeume);
+  const g = loeseGradtageAuf(ist.verbrauch, a, thetaMittel);
+  const entwurf = JSON.parse(JSON.stringify(a));
+  const meldung = el('p', { class: 'zeile', 'aria-live': 'polite' });
+  const manuellZeile = el('div', { class: 'knopfzeile' }, el('span', {}, 'Gradtagzahl G: '), zahlFeld(entwurf.gradtage.manuell, (w) => { entwurf.gradtage.manuell = w; }, 'Gradtagzahl G manuell'), ' Kd');
+  const verbrauchZeile = el('div', { class: 'knopfzeile' }, el('span', {}, 'Verbrauchsdatensatz: '), auswahl(
+    [{ wert: '', label: ist.verbrauch.length > 0 ? '– bitte wählen –' : 'kein Verbrauchsabgleich vorhanden' }, ...ist.verbrauch.map((v) => ({ wert: v.id, label: v.name }))],
+    entwurf.gradtage.verbrauchId ?? '', (w) => { entwurf.gradtage.verbrauchId = w || null; }, 'Verbrauchsdatensatz für G',
+  ));
+  const zeigeQuelle = () => { manuellZeile.hidden = entwurf.gradtage.quelle !== 'manuell'; verbrauchZeile.hidden = entwurf.gradtage.quelle === 'manuell'; };
+  const quelleWahl = auswahl(
+    [{ wert: 'verbrauch', label: 'Aus Verbrauchsdatensatz (Summe der Heizmonate, umgerechnet auf die mittlere Soll-Temperatur)' }, { wert: 'manuell', label: 'Manuell eingeben' }],
+    entwurf.gradtage.quelle, (w) => { entwurf.gradtage.quelle = w; zeigeQuelle(); }, 'Quelle der Gradtagzahl',
+  );
+  zeigeQuelle();
+  const bereichZeile = (name, objekt, einheit, beschriftung) => el(
+    'div', { class: 'knopfzeile' }, el('span', {}, `${name}: min `), zahlFeld(objekt.min, (w) => { objekt.min = w; }, `${beschriftung} min`),
+    el('span', {}, ' max '), zahlFeld(objekt.max, (w) => { objekt.max = w; }, `${beschriftung} max`), ` ${einheit}`,
+  );
+  const speichern = el('button', {
+    type: 'button',
+    class: 'primaer',
+    'data-lesen': true,
+    onClick: async () => {
+      const fehler = [];
+      const bereichPruefen = (name, b) => {
+        const leer = (x) => x === null || x === undefined;
+        if (leer(b.min) && leer(b.max)) return { min: null, max: null };
+        if (!(Number.isFinite(b.min) && Number.isFinite(b.max)) || b.min < 0 || b.min > b.max) fehler.push(`${name}: bitte Minimum und Maximum als Zahlen eintragen (Minimum nicht größer als Maximum, nicht negativ).`);
+        return b;
+      };
+      if (entwurf.gradtage.quelle === 'manuell' && entwurf.gradtage.manuell !== null && !(entwurf.gradtage.manuell > 0)) fehler.push('Gradtagzahl G: bitte eine Zahl größer als 0 eintragen.');
+      const jaz = bereichPruefen('Jahresarbeitszahl', entwurf.jaz);
+      if (jaz.min !== null && !(jaz.min > 0)) fehler.push('Jahresarbeitszahl: muss größer als 0 sein.');
+      const preis = bereichPruefen('Strompreis', entwurf.strompreis);
+      if (fehler.length > 0) { meldung.textContent = fehler.join(' '); return; }
+      await db.speichereVergleichsannahmen({ gradtage: entwurf.gradtage, jaz, strompreis: preis });
+      neuLaden();
+    },
+  }, 'Annahmen speichern');
+  return el(
+    'section', { class: 'karte', 'data-lesen': true },
+    el('h3', {}, 'Annahmen für die Jahreswärme-Differenz'),
+    el('p', { class: 'zeile' }, 'Die App schätzt nichts selbst: Gradtagzahl, Jahresarbeitszahl und Strompreis trägst du ein. JAZ und Strompreis sind optional, ohne sie entfällt die Stromrechnung.'),
+    el('p', { class: 'zeile' }, `Mittlere Soll-Temperatur aus den Räumen: ${thetaMittel === null ? 'nicht berechenbar' : `${zahlZuText(Math.round(thetaMittel * 10) / 10)} °C`}. Aktuell: ${g.text}.`),
+    el('label', {}, el('span', { class: 'klein' }, 'Gradtagzahl G aus'), quelleWahl),
+    verbrauchZeile,
+    manuellZeile,
+    bereichZeile('Jahresarbeitszahl JAZ', entwurf.jaz, '', 'JAZ'),
+    bereichZeile('Strompreis', entwurf.strompreis, 'ct/kWh', 'Strompreis'),
+    el('div', { class: 'knopfzeile' }, speichern),
+    meldung,
+  );
+}
+
 function vergleichsAnsicht(ist, szenarien) {
   if (szenarien.length === 0) return el('p', { class: 'leer' }, 'Sobald es Szenarien gibt, steht hier der Vergleich mit dem Ist-Zustand.');
   const vergleich = baueVergleich(ist, szenarien);
@@ -122,6 +186,10 @@ function vergleichsAnsicht(ist, szenarien) {
     hinweise.length > 0
       ? el('div', { class: 'meldung warnung' }, el('strong', {}, 'Hinweise zu Abweichungen'), el('ul', {}, hinweise.flatMap((s) => s.szenarioHinweise.map((h) => el('li', {}, `${s.name}: ${h.text}`)))))
       : null,
+    el('h3', {}, 'Jahreswärme-Differenz gegenüber dem Ist-Zustand'),
+    el('p', { class: 'meldung warnung jahreshinweis' }, el('strong', {}, 'Hinweis: '), t.jahreswaerme.hinweis),
+    tabelle(t.jahreswaerme),
+    el('ul', { class: 'zeile' }, t.jahreswaerme.annahmen.map((x) => el('li', {}, x))),
     el('h3', {}, 'Räume'),
     el('p', { class: 'zeile' }, 'Heizlast als Mittelwert; die Vorlauftemperatur gilt für die ungünstige Heizlast.'),
     tabelle(t.raeume),
@@ -163,6 +231,7 @@ async function renderListe(container, neuLaden) {
       ...szenarien.map((s) => szenarioKarte(ist, s, aktiv, neuLaden)),
     ),
     el('h2', {}, 'Vergleich'),
+    annahmenKarte(ist, neuLaden),
     vergleichsAnsicht(ist, szenarien),
   );
 }
@@ -220,6 +289,23 @@ async function renderEditor(container, id) {
   const abschnitt = (titel, text, ...inhalt) => el('section', { class: 'karte szenario-abschnitt' }, el('h3', {}, titel), text ? el('p', { class: 'zeile' }, text) : null, ...inhalt);
   const feldMitFehlerFlag = (wert, beiAenderung, beschriftung) => zahlFeld(wert, (w) => { beiAenderung(w); geaendert(); }, beschriftung);
   const zeileMitHinweis = (zeile, ziel) => (ziel === null ? [zeile] : [zeile, el('tr', {}, el('td', { class: 'hinweis-zeile', colspan: '4' }, `⚠ ${ziel} ${fehlt} im Ist-Zustand, die Abweichung wirkt nicht.`))]);
+
+  // Kosten: reine Eingabe, die App schätzt nichts.
+  function kostenAbschnitt() {
+    const k = entwurf.kosten;
+    const zeile = (name, bereich, beschriftung) => el(
+      'div', { class: 'knopfzeile' }, el('span', {}, `${name}: min `), feldMitFehlerFlag(bereich.min, (w) => { bereich.min = w; }, `${beschriftung} min`),
+      el('span', {}, ' max '), feldMitFehlerFlag(bereich.max, (w) => { bereich.max = w; }, `${beschriftung} max`), ' €',
+    );
+    const quelle = el('input', { type: 'text', value: k.quelle, 'aria-label': 'Quelle der Kosten' });
+    quelle.addEventListener('input', () => { k.quelle = quelle.value; geaendert(); });
+    return abschnitt(
+      'Kosten (Eingabe)', 'Die App schätzt keine Kosten. Trage Minimum und Maximum aus Angeboten ein, leer lassen heißt „nicht angegeben“. Ohne Förderung gilt 0 €. Kosten nach Förderung = Investition minus Förderung, von der niedrigsten Investition mit höchster Förderung bis zur höchsten Investition mit niedrigster Förderung.',
+      zeile('Investitionskosten', k.investition, 'Investition'),
+      zeile('Förderung', k.foerderung, 'Förderung'),
+      el('label', {}, el('span', { class: 'klein' }, 'Quelle (zum Beispiel „Angebot Dachdecker vom …“)'), quelle),
+    );
+  }
 
   function bauteileAbschnitt() {
     const zeilen = Object.entries(a.bauteile).flatMap(([bid, ov]) => {
@@ -383,7 +469,7 @@ async function renderEditor(container, id) {
   }
 
   function zeichne() {
-    ersetzeKinder(bereiche, bauteileAbschnitt(), oeffnungenAbschnitt(), heizkoerperAbschnitt(), raumAbschnitt(), luftwechselAbschnitt(), einstellungenAbschnitt());
+    ersetzeKinder(bereiche, kostenAbschnitt(), bauteileAbschnitt(), oeffnungenAbschnitt(), heizkoerperAbschnitt(), raumAbschnitt(), luftwechselAbschnitt(), einstellungenAbschnitt());
   }
 
   const speichernKnopf = el('button', { type: 'button', class: 'primaer' }, 'Speichern');

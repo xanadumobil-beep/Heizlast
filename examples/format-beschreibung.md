@@ -204,6 +204,14 @@ als fehlerhaft markiert.
 | `heizkoerper[].material` | `""`, `stahl`, `guss`, `aluminium`, `sonstiges` |
 | `heizkoerper[].ventil` | `neu`, `alt` |
 
+## `daten.einstellungen.vergleich` (optional)
+
+Annahmen für die Jahreswärme-Differenz im Szenarienvergleich: `{ "gradtage": { "quelle": "verbrauch" | "manuell", "verbrauchId": "<id>" | null,
+"manuell": 3000 | null }, "jaz": { "min": 3, "max": 4 }, "strompreis": { "min": 28, "max": 34 } }`. `jaz` (Jahresarbeitszahl) und `strompreis` (ct/kWh) sind optional
+(`null`-Werte: keine Stromrechnung). Die Gradtagzahl G stammt aus der Summe der Heizmonate eines Verbrauchsdatensatzes, umgerechnet auf die mittlere
+Soll-Temperatur der Räume, oder wird manuell in Kd eingegeben. Gerechnet wird ΔH = ΔΦ / (θ_soll,Mittel − θ_e), ΔQ = ΔH · 24 · G / 1000 und optional
+ΔStrom = ΔQ / JAZ mit Kosten = ΔStrom · Strompreis / 100. Das Ergebnis ist eine Schätzung aus der Heizlast, Fremdwärme und Nutzerverhalten sind nicht berücksichtigt.
+
 ## `daten.szenarien`
 
 Ein Szenario beschreibt **Abweichungen** gegenüber dem Ist-Zustand (den normalen Projektdaten). Der Ist-Zustand wird durch Szenarien
@@ -212,6 +220,7 @@ nie verändert. Fehlende Teile ergänzt die App beim Import mit Leerwerten.
 | Feld | Bedeutung |
 |---|---|
 | `id`, `name`, `beschreibung`, `erstelltAm` | Kennung (Pflicht), Name, Text, Zeitpunkt (ISO) |
+| `kosten` | `{ "investition": { "min": 8000, "max": 12000 }, "foerderung": { "min": 2000, "max": 3000 }, "quelle": "Angebot Dachdecker vom …" }`. Reine Eingabe in €, die App schätzt keine Kosten. Leere Werte (`null`) heißen „nicht angegeben“; fehlt die Förderung, gilt sie als 0 €. Kosten nach Förderung = Investition minus Förderung (niedrigste Investition mit höchster Förderung bis höchste Investition mit niedrigster Förderung). |
 | `abweichungen.bauteile` | `{ "<bauteilId>": { "name": "Flachdach", "u": { "min": 0.2, "max": 0.2 } } }` überschreibt den U-Wert |
 | `abweichungen.oeffnungstypen` | `{ "<typId>": { "name": "...", "uw": 1.0 } }` überschreibt den Uw-Wert |
 | `abweichungen.heizkoerperStatus` | `{ "<heizkoerperId>": { "name": "...", "status": "entfaellt" } }`, Status wie bei den Heizkörpern |

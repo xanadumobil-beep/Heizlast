@@ -6,6 +6,7 @@
 //
 // Ein Szenario: {
 //   id, name, beschreibung, erstelltAm,
+//   kosten: { investition: { min, max } | leer, foerderung: { min, max } | leer, quelle },   nur Eingabe in €, die App schätzt nichts
 //   abweichungen: {
 //     bauteile:            { [bauteilId]:    { name, u: { min, max } } },        U-Wert-Spanne in W/(m²K)
 //     oeffnungstypen:      { [typId]:        { name, uw } },                     Uw in W/(m²K)
@@ -23,7 +24,7 @@
 import { zahlZuText } from './engine/format.js';
 import { kennlinieZuText } from './modell.js';
 import { label, HK_STATI, BAUARTEN_HK, VENTILE, werte } from './schemas.js';
-import { pruefeZahl, pruefeBereich, fehlerMeldung } from './validate.js';
+import { pruefeZahl, pruefeBereich, fehlerMeldung, warnMeldung } from './validate.js';
 import { validiereHeizkoerper } from './validate.js';
 
 const z = zahlZuText;
@@ -42,8 +43,22 @@ export const leereAbweichungen = () => ({
   einstellungen: {},
 });
 
+export const leereKosten = () => ({ investition: { min: null, max: null }, foerderung: { min: null, max: null }, quelle: '' });
+
 export function neuesSzenario(id, name = 'Neues Szenario', jetzt = new Date()) {
-  return { id, name, beschreibung: '', erstelltAm: jetzt.toISOString(), abweichungen: leereAbweichungen() };
+  return { id, name, beschreibung: '', erstelltAm: jetzt.toISOString(), kosten: leereKosten(), abweichungen: leereAbweichungen() };
+}
+
+const kostenBereich = (b) => ({ min: typeof b?.min === 'number' ? b.min : null, max: typeof b?.max === 'number' ? b.max : null });
+// Eingetragen heißt: Minimum und Maximum sind Zahlen.
+export const kostenEingetragen = (b) => Number.isFinite(b?.min) && Number.isFinite(b?.max);
+
+// Kosten nach Förderung als Bandbreite { min, max } in €: vom niedrigsten Preis mit höchster Förderung bis zum höchsten
+// Preis mit niedrigster Förderung. Ohne Investitionskosten null. Fehlt die Förderung, gilt sie als 0 €.
+export function kostenNachFoerderung(kosten) {
+  if (!kostenEingetragen(kosten?.investition)) return null;
+  const f = kostenEingetragen(kosten.foerderung) ? kosten.foerderung : { min: 0, max: 0 };
+  return { min: kosten.investition.min - f.max, max: kosten.investition.max - f.min };
 }
 
 // Ergänzt fehlende Teile (zum Beispiel aus einer Datei) mit Leerwerten. Gibt immer ein vollständiges Szenario zurück.
@@ -55,6 +70,7 @@ export function normalisiereSzenario(roh) {
     name: typeof roh?.name === 'string' ? roh.name : '',
     beschreibung: typeof roh?.beschreibung === 'string' ? roh.beschreibung : '',
     erstelltAm: typeof roh?.erstelltAm === 'string' ? roh.erstelltAm : null,
+    kosten: { investition: kostenBereich(roh?.kosten?.investition), foerderung: kostenBereich(roh?.kosten?.foerderung), quelle: typeof roh?.kosten?.quelle === 'string' ? roh.kosten.quelle : '' },
     abweichungen: {
       bauteile: objekt(a.bauteile),
       oeffnungstypen: objekt(a.oeffnungstypen),
@@ -196,6 +212,16 @@ export function validiereSzenario(szenario) {
   const a = normalisiereSzenario(szenario).abweichungen;
   const meldungen = [];
   if (!szenario.name || szenario.name.trim() === '') meldungen.push(fehlerMeldung('name', 'Szenario: bitte einen Namen eingeben.'));
+  // Kosten: leer lassen heißt „nicht angegeben“; sobald ein Wert steht, sind Minimum und Maximum Pflicht.
+  const kosten = normalisiereSzenario(szenario).kosten;
+  for (const [schluessel, name] of [['investition', 'Investitionskosten'], ['foerderung', 'Förderung']]) {
+    const k = szenario.kosten?.[schluessel];
+    const angefasst = k && (k.min !== null && k.min !== undefined || k.max !== null && k.max !== undefined);
+    if (angefasst) meldungen.push(...pruefeBereich(`kosten.${schluessel}`, k, { name, einheit: '€', fehlerWennKleiner: 0, warnWennUeber: 1000000 }));
+  }
+  if (kostenEingetragen(kosten.investition) && kostenEingetragen(kosten.foerderung) && kosten.foerderung.max > kosten.investition.max) {
+    meldungen.push(warnMeldung('kosten.foerderung', 'Die Förderung ist höher als die Investitionskosten.'));
+  }
   for (const [id, ov] of Object.entries(a.bauteile)) {
     meldungen.push(...pruefeBereich(`bauteile.${id}`, ov.u, { name: `U-Wert „${ov.name ?? id}“`, einheit: 'W/(m²K)', fehlerWennKleinerGleich: 0, warnWennUeber: 6, warnWennUnter: 0.05 }));
   }
@@ -237,5 +263,5 @@ export function zaehleAbweichungen(szenario) {
 // Angaben zu einem Szenario für den Bericht: Name, Beschreibung, Abweichungen (Ist- und Szenario-Wert) und Hinweise.
 export function szenarioInfo(ist, szenario) {
   const s = normalisiereSzenario(szenario);
-  return { name: s.name, beschreibung: s.beschreibung, zeilen: beschreibeAbweichungen(ist, s), hinweise: wendeSzenarioAn(ist, s).hinweise };
+  return { name: s.name, beschreibung: s.beschreibung, kosten: s.kosten, zeilen: beschreibeAbweichungen(ist, s), hinweise: wendeSzenarioAn(ist, s).hinweise };
 }

@@ -16,7 +16,7 @@ function tabelle(b) {
       'table', { class: b.kopf.length > 8 ? 'breit' : '' },
       el('thead', {}, el('tr', {}, b.kopf.map((k, i) => el('th', { class: klasse(i), scope: 'col' }, k)))),
       el('tbody', {}, b.zeilen.map((zeile, r) => el(
-        'tr', { class: b.summenzeile && r === b.zeilen.length - 1 ? 'summe' : '' },
+        'tr', { class: `${b.summenzeile && r === b.zeilen.length - 1 ? 'summe' : ''}${(b.hervor ?? []).includes(r) ? ' hervor' : ''}` },
         zeile.map((zelle, i) => el(i === 0 ? 'th' : 'td', { class: klasse(i), scope: i === 0 ? 'row' : undefined }, zelle)),
       ))),
     ),

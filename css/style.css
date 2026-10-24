@@ -502,3 +502,8 @@ body.szenario-aktiv .szenariowahl select { border-color: var(--szenario); font-w
 .vergleich-tabelle .zahl { white-space: nowrap; }
 .berichtwahl { display: grid; gap: 4px; margin: 10px 0; max-width: 520px; }
 .berichtwahl select { min-height: 44px; font-size: 1rem; }
+
+.tabelle tr.hervor th, .tabelle tr.hervor td { font-weight: 800; background: var(--akzent); color: var(--akzent-text); font-size: 1.05rem; }
+.b-tabelle tr.hervor th, .b-tabelle tr.hervor td { font-weight: 800; background: #e6e6e6; border-top: 2px solid #000; border-bottom: 2px solid #000; }
+.jahreshinweis { margin: 8px 0; }
+.szenario-abschnitt .knopfzeile input[type="text"], .karte .knopfzeile input[type="text"] { width: 8em; min-width: 0; }

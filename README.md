@@ -24,7 +24,8 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
   Fenster-Uw, Heizkörper-Status und zusätzliche Heizkörper, Soll-Temperaturen, Luftwechsel, Ziel-Vorlauf und Spreizung). Oben wählst
   du die Ansicht: Ist-Zustand oder ein Szenario. Bei aktivem Szenario zeigen Räume, Plan, Vorlauf und Bericht dessen Werte, und die
   Bestandsdaten sind schreibgeschützt. Der Tab „Szenarien“ vergleicht alle Szenarien mit dem Ist-Zustand (Heizlast, Minderung,
-  Vorlauftemperatur, Verluste nach Bauteilart). Der Bericht lässt sich für den Ist-Zustand, ein Szenario oder den Vergleich drucken.
+  Vorlauftemperatur, Verluste nach Bauteilart), nennt den „Auslegungswert Wärmepumpe (obere Grenze)“ und zeigt eingegebene Kosten nach Förderung sowie eine
+  Schätzung der Jahreswärme-Differenz (Gradtagzahl, JAZ und Strompreis gibst du ein, die App schätzt nichts selbst). Der Bericht lässt sich für den Ist-Zustand, ein Szenario oder den Vergleich drucken.
 - **Heizkörper und Vorlauftemperatur:** Leistung nach Norm-Bedingungen, Wärmepumpen-Kennlinien, nötige Vorlauftemperatur
   je Haus und je Raum, bestimmender Raum.
 - **Verbrauchsabgleich:** Gasverbrauch und Holz in eine Heizlast umgerechnet, mit zwei Innentemperaturen

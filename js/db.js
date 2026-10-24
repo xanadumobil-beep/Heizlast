@@ -93,6 +93,13 @@ export async function speicherePlan(store, id, plan) {
   await ausfuehren(store, 'readwrite', (s) => s.put(neu));
 }
 
+// Annahmen für die Jahreswärme-Differenz (einstellungen.vergleich). Das sind Vergleichsannahmen und keine Bestandsdaten, sie bleiben im
+// Szenario-Betrieb bearbeitbar. Geschrieben wird nur das Feld "vergleich" an den Einstellungen des Ist-Zustands.
+export async function speichereVergleichsannahmen(annahmen) {
+  const aktuell = await ladeEinstellungen();
+  await ausfuehren('settings', 'readwrite', (s) => s.put({ ...aktuell, vergleich: annahmen }));
+}
+
 // Aktives Szenario (null = Ist-Zustand). Der Zustand liegt in "meta" und gehört nicht zur Sicherungsdatei.
 export async function ladeAktivesSzenarioId() {
   return (await lade('meta', 'aktivesSzenario'))?.szenarioId ?? null;

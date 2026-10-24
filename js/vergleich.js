@@ -3,7 +3,9 @@
 
 import { formatZahl } from './engine/format.js';
 import { rechne, bewerteVorlauf } from './daten.js';
-import { wendeSzenarioAn } from './szenario.js';
+import { wendeSzenarioAn, kostenNachFoerderung, kostenEingetragen } from './szenario.js';
+import { mittlereInnentemperatur } from './modell.js';
+import { vergleichsannahmen, loeseGradtageAuf, berechneJahreswaerme, JAHRESHINWEIS } from './jahreswaerme.js';
 import { berechneteBandbreite, wattBereich, watt, vorlaufText } from './anzeige.js';
 
 const summe = (werte) => werte.reduce((a, b) => a + b, 0);
@@ -81,7 +83,7 @@ export function berechneAnsicht(projekt) {
 }
 
 // Vergleich: Ist-Zustand plus alle Szenarien. ist: Projekt wie aus ladeProjekt() (ohne Szenario), szenarien: Liste.
-export function baueVergleich(ist, szenarien) {
+export function baueVergleich(ist, szenarien, annahmen = vergleichsannahmen(ist.einstellungen)) {
   const basis = { id: null, name: 'Ist-Zustand', szenario: null, szenarioHinweise: [], ...berechneAnsicht(ist) };
   const spalten = [basis];
   for (const s of szenarien) {
@@ -89,11 +91,28 @@ export function baueVergleich(ist, szenarien) {
     const a = berechneAnsicht(projekt);
     spalten.push({ id: s.id, name: s.name, szenario: s, szenarioHinweise: hinweise, ...a });
   }
+  // Jahreswärme-Differenz: Ist-Zustand minus Szenario, als Bandbreite aus der günstigen und der ungünstigen Rechnung.
+  const thetaMittel = mittlereInnentemperatur(ist.raeume);
+  const g = loeseGradtageAuf(ist.verbrauch ?? [], annahmen, thetaMittel);
+  for (const sp of spalten) {
+    sp.kostenNachFoerderung = sp.szenario ? kostenNachFoerderung(sp.szenario.kosten) : null;
+    if (!sp.szenario) { sp.jahr = null; continue; }
+    const ig = basis.ergebnis?.gebaeude;
+    const sg = sp.ergebnis?.gebaeude;
+    const deltas = ig && sg ? [ig.guenstig.summe - sg.guenstig.summe, ig.ungunstig.summe - sg.ungunstig.summe] : null;
+    const deltaPhi = deltas ? { min: Math.min(...deltas), max: Math.max(...deltas) } : null;
+    sp.jahr = {
+      ...berechneJahreswaerme({
+        deltaPhi, thetaMittel, thetaAussen: ist.einstellungen.thetaAussen, gradtage: g.g, jaz: annahmen.jaz, strompreis: annahmen.strompreis,
+      }),
+      deltaPhi,
+    };
+  }
   for (const sp of spalten) {
     sp.minderungW = basis.mittel !== null && sp.mittel !== null ? basis.mittel - sp.mittel : null;
     sp.minderungProzent = sp.minderungW !== null && basis.mittel > 0 ? (sp.minderungW / basis.mittel) * 100 : null;
   }
-  return { spalten };
+  return { spalten, annahmen, thetaMittel, gradtage: g };
 }
 
 // --- Texte -----------------------------------------------------------------------------------
@@ -107,27 +126,90 @@ export function minderungText(sp) {
   return `${mitMinus(sp.minderungW / 1000, 2)} kW (${sp.minderungProzent === null ? '–' : `${mitMinus(sp.minderungProzent, 1)} %`})`;
 }
 
+const rund = (x, stellen) => Math.round(x * 10 ** stellen) / 10 ** stellen;
+// Bandbreite als Text: „von – bis“, bei gleichen Werten nur einer. Minus als „−“.
+export function bandText(b, stellen, einheit) {
+  if (!b) return '–';
+  const t = (x) => mitMinus(rund(x, stellen), stellen);
+  const a = t(b.min);
+  const c = t(b.max);
+  return `${a === c ? a : `${a} – ${c}`}${einheit ? ` ${einheit}` : ''}`;
+}
+
+// Eingegebene Werte ohne feste Nachkommastellen (30 statt 30,0).
+const bandKurz = (b, einheit) => {
+  const t = (x) => String(rund(x, 2)).replace('.', ',');
+  return `${t(b.min) === t(b.max) ? t(b.min) : `${t(b.min)} – ${t(b.max)}`}${einheit ? ` ${einheit}` : ''}`;
+};
+
 function vorlaufHausText(sp) {
   if (!sp.bestimmend) return sp.bewertung ? 'nicht bestimmbar' : '–';
   return `${vorlaufText(sp.bestimmend.vorlauf)} (${sp.bestimmend.name})`;
+}
+
+export const AUSLEGUNGSWERT = 'Auslegungswert Wärmepumpe (obere Grenze)';
+
+function annahmenTexte(vergleich, mitJaz, mitPreis) {
+  const a = vergleich.annahmen;
+  if (!a) return [];
+  const komma = (x) => String(x).replace('.', ',');
+  const texte = [
+    vergleich.thetaMittel === null || vergleich.thetaMittel === undefined
+      ? 'Mittlere Soll-Temperatur: nicht berechenbar (keine Räume mit Fläche und Temperatur)'
+      : `Mittlere Soll-Temperatur θ_soll,Mittel = ${komma(rund(vergleich.thetaMittel, 1))} °C (nach Raumfläche gewichtet), Normaußentemperatur θ_e = ${komma(vergleich.spalten[0].projekt.einstellungen.thetaAussen)} °C`,
+    `Gradtagzahl G: ${vergleich.gradtage.text}`,
+  ];
+  texte.push(mitJaz ? `Jahresarbeitszahl JAZ: ${bandKurz(a.jaz)}` : 'Jahresarbeitszahl: nicht angegeben, daher keine Stromrechnung');
+  if (mitJaz) texte.push(mitPreis ? `Strompreis: ${bandKurz(a.strompreis, 'ct/kWh')}` : 'Strompreis: nicht angegeben, daher keine Kostenrechnung');
+  return texte;
 }
 
 // Tabellen für Bildschirm und Bericht: { kopf, zeilen } mit Zeichenketten.
 export function vergleichTabellen(vergleich) {
   const sp = vergleich.spalten;
   const kopfmitName = ['', ...sp.map((s) => s.name)];
+  const kosten = (f) => sp.map((s) => (s.szenario ? f(s.szenario) : '–'));
   const kennzahlen = {
     kopf: ['Kennzahl', ...sp.map((s) => s.name)],
     zeilen: [
       ['Gebäudeheizlast (günstig bis ungünstig)', ...sp.map((s) => (s.bandbreite ? wattBereich(s.bandbreite.min, s.bandbreite.max) : s.fehler ? 'Rechenfehler' : '–'))],
+      [AUSLEGUNGSWERT, ...sp.map((s) => (s.bandbreite ? watt(s.bandbreite.max) : '–'))],
       ['Gebäudeheizlast, Mittelwert', ...sp.map((s) => (s.mittel !== null ? watt(s.mittel) : '–'))],
       ['Minderung gegenüber Ist-Zustand (Mittelwert, negativ = Mehrbedarf)', ...sp.map(minderungText)],
+      ['Investitionskosten (von – bis)', ...kosten((z) => (kostenEingetragen(z.kosten.investition) ? bandText(z.kosten.investition, 0, '€') : '–'))],
+      ['Förderung (von – bis)', ...kosten((z) => (kostenEingetragen(z.kosten.foerderung) ? bandText(z.kosten.foerderung, 0, '€') : '–'))],
+      ['Kosten nach Förderung (von – bis)', ...sp.map((s) => (s.szenario ? (s.kostenNachFoerderung ? bandText(s.kostenNachFoerderung, 0, '€') : '–') : '–'))],
+      ['Quelle der Kosten', ...kosten((z) => z.kosten.quelle || '–')],
       ['Nötige Vorlauftemperatur des Hauses (bestimmender Raum)', ...sp.map(vorlaufHausText)],
       ['Ziel-Vorlauftemperatur', ...sp.map((s) => `${formatZahl(s.ziel, 0)} °C`)],
       ['Räume mit Unterdeckung bei der Ziel-Vorlauftemperatur', ...sp.map((s) => (s.bewertung ? `${s.raeumeMitUnterdeckung} von ${s.raeumeBewertet}${s.raeumeOhneBewertung > 0 ? ` (${s.raeumeOhneBewertung} ohne Bewertung)` : ''}` : '–'))],
       ['Hinweise zu den Abweichungen', ...sp.map((s) => (s.id === null ? '–' : s.szenarioHinweise.length === 0 ? 'keine' : `${s.szenarioHinweise.length}`))],
     ],
     ausrichtung: `l${'l'.repeat(sp.length)}`,
+    hervor: [1],
+  };
+
+  // Jahreswärme-Differenz je Szenario (ohne die Ist-Spalte): Minderung gegenüber dem Ist-Zustand, positiv = weniger Bedarf.
+  const szenarioSpalten = sp.slice(1);
+  const mitJaz = Number.isFinite(vergleich.annahmen?.jaz.min) && Number.isFinite(vergleich.annahmen?.jaz.max);
+  const mitPreis = mitJaz && Number.isFinite(vergleich.annahmen.strompreis.min) && Number.isFinite(vergleich.annahmen.strompreis.max);
+  const jahrZelle = (s, feld, stellen, einheit) => {
+    if (!s.jahr) return '–';
+    if (s.jahr[feld]) return bandText(s.jahr[feld], stellen, einheit);
+    return s.jahr.grund ?? '–';
+  };
+  const jahreswaerme = {
+    kopf: ['Kennzahl (Minderung gegenüber dem Ist-Zustand, negativ = Mehrbedarf)', ...szenarioSpalten.map((s) => s.name)],
+    zeilen: [
+      ['Minderung der Gebäudeheizlast ΔΦ (günstig bis ungünstig)', ...szenarioSpalten.map((s) => (s.jahr?.deltaPhi ? bandText(s.jahr.deltaPhi, 0, 'W') : '–'))],
+      ['Minderung des Wärmeverlusts ΔH', ...szenarioSpalten.map((s) => jahrZelle(s, 'deltaH', 2, 'W/K'))],
+      ['Wärmeminderung ΔQ pro Jahr', ...szenarioSpalten.map((s) => jahrZelle(s, 'deltaQ', 0, 'kWh/a'))],
+      ...(mitJaz ? [['Stromminderung ΔStrom pro Jahr (mit JAZ)', ...szenarioSpalten.map((s) => jahrZelle(s, 'deltaStrom', 0, 'kWh/a'))]] : []),
+      ...(mitPreis ? [['Stromkosten-Minderung pro Jahr', ...szenarioSpalten.map((s) => jahrZelle(s, 'kosten', 1, '€/a'))]] : []),
+    ],
+    ausrichtung: `l${'l'.repeat(szenarioSpalten.length)}`,
+    hinweis: JAHRESHINWEIS,
+    annahmen: annahmenTexte(vergleich, mitJaz, mitPreis),
   };
 
   const ist = sp[0];
@@ -164,5 +246,5 @@ export function vergleichTabellen(vergleich) {
     ausrichtung: `l${'r'.repeat(sp.length)}`,
     summenzeile: true,
   };
-  return { kennzahlen, raeume, transmission, kopfmitName };
+  return { kennzahlen, jahreswaerme, raeume, transmission, kopfmitName };
 }

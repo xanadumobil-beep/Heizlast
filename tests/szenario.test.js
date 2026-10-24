@@ -7,9 +7,10 @@ import { rechne } from '../js/daten.js';
 import * as db from '../js/db.js';
 import {
   neuesSzenario, kopiereSzenario, benenneUm, loescheSzenario, normalisiereSzenario, wendeSzenarioAn, beschreibeAbweichungen,
-  validiereSzenario, zaehleAbweichungen, szenarioInfo,
+  validiereSzenario, zaehleAbweichungen, szenarioInfo, kostenNachFoerderung, leereKosten,
 } from '../js/szenario.js';
-import { baueVergleich, vergleichTabellen, verlusteNachArt, VERLUST_ARTEN, minderungText } from '../js/vergleich.js';
+import { baueVergleich, vergleichTabellen, verlusteNachArt, VERLUST_ARTEN, minderungText, AUSLEGUNGSWERT } from '../js/vergleich.js';
+import { berechneJahreswaerme, vergleichsannahmen, loeseGradtageAuf, JAHRESHINWEIS } from '../js/jahreswaerme.js';
 import { baueBericht, baueVergleichsBericht } from '../js/bericht.js';
 
 async function ladeText() {
@@ -384,7 +385,7 @@ test('Bericht „Szenarienvergleich“: Kennzahlen, Räume, Verluste und Abweich
   wahr(['Szenarienvergleich', 'Räume im Vergleich', 'Woher kommt die Änderung', 'Abweichungen je Szenario'].every((t) => titel.some((x) => x.includes(t))), titel.join(' | '));
   wahr(b.abschnitte.find((x) => x.titel.includes('Abweichungen je Szenario')).neueSeite === true, 'Abweichungen auf neuer Seite');
   const tabellen = b.abschnitte.flatMap((x) => x.bloecke).filter((x) => x.art === 'tabelle');
-  wahr(tabellen.length === 4, `Kennzahlen, Räume, Verluste und eine Abweichungstabelle: ${tabellen.length}`);
+  wahr(tabellen.length === 5, `Kennzahlen, Jahreswärme, Räume, Verluste und eine Abweichungstabelle: ${tabellen.length}`);
   wahr(tabellen[0].kopf.join() === 'Kennzahl,Ist-Zustand,Dach gedämmt,Leer', tabellen[0].kopf.join());
   wahr(JSON.stringify(b.abschnitte.find((x) => x.titel.includes('Abweichungen je Szenario'))).includes('Keine Abweichungen'), 'Szenario ohne Abweichungen ist benannt');
   const leer = baueVergleichsBericht(ist, [], jetzt);
@@ -412,4 +413,181 @@ test('beschreibeAbweichungen: Ist- und Szenario-Wert nebeneinander für alle Art
   wahr(finde('Raum (Luftwechsel)').ist === 'Standard (0,5 – 1 1/h)' && finde('Raum (Luftwechsel)').szenario === '0,3 1/h', 'Luftwechsel Raum');
   wahr(finde('Einstellung', 'Ziel-Vorlauftemperatur').ist === '55 °C' && finde('Einstellung', 'Spreizung Vor-/Rücklauf').szenario === '10 K', 'Einstellungen');
   gleich(zaehleAbweichungen(sz), 8, 0, 'acht Abweichungen');
+});
+
+// --- Kosten je Szenario (nur Eingabe) --------------------------------------------------------------------
+
+// Investition 8000 bis 12000 €, Förderung 2000 bis 3000 €:
+//   Kosten nach Förderung: von 8000 − 3000 = 5000 € (niedrigster Preis, höchste Förderung) bis 12000 − 2000 = 10000 €
+test('Kosten: Eingabe als Bandbreite, Kosten nach Förderung = Investition minus Förderung (5000 bis 10000 €)', () => {
+  const k = leereKosten();
+  gleich(kostenNachFoerderung(k), null, 0, 'ohne Eingabe keine Kosten') ;
+  k.investition = { min: 8000, max: 12000 };
+  const ohneFoerderung = kostenNachFoerderung(k);
+  wahr(ohneFoerderung.min === 8000 && ohneFoerderung.max === 12000, 'ohne Förderung gilt 0 €');
+  k.foerderung = { min: 2000, max: 3000 };
+  const nach = kostenNachFoerderung(k);
+  wahr(nach.min === 5000 && nach.max === 10000, `${nach.min} bis ${nach.max}`);
+  wahr(kostenNachFoerderung({ investition: { min: 8000, max: null }, foerderung: { min: 0, max: 0 } }) === null, 'unvollständige Investition zählt nicht');
+});
+
+test('Kosten: Prüfung (Pflicht beider Werte, nicht negativ, Reihenfolge), leer ist erlaubt, alte Szenarien erhalten leere Kosten', () => {
+  const sz = neuesSzenario('s', 'Kosten');
+  wahr(validiereSzenario(sz).length === 0, 'leere Kosten sind gültig');
+  sz.kosten.investition = { min: 8000, max: null };
+  wahr(validiereSzenario(sz).some((m) => m.stufe === 'fehler' && m.feld === 'kosten.investition'), 'nur Minimum: Fehler');
+  sz.kosten.investition = { min: 12000, max: 8000 };
+  wahr(validiereSzenario(sz).some((m) => m.stufe === 'fehler'), 'Minimum über Maximum: Fehler');
+  sz.kosten.investition = { min: -5, max: 100 };
+  wahr(validiereSzenario(sz).some((m) => m.stufe === 'fehler'), 'negativ: Fehler');
+  sz.kosten.investition = { min: NaN, max: 100 };
+  wahr(validiereSzenario(sz).some((m) => m.stufe === 'fehler'), 'unlesbar: Fehler');
+  sz.kosten.investition = { min: 1000, max: 2000 };
+  sz.kosten.foerderung = { min: 500, max: 3000 };
+  wahr(validiereSzenario(sz).every((m) => m.stufe === 'warnung') && validiereSzenario(sz).length === 1, 'Förderung über Investition: Warnung');
+  const alt = normalisiereSzenario({ id: 'alt', name: 'Alt' });
+  wahr(alt.kosten.investition.min === null && alt.kosten.foerderung.max === null && alt.kosten.quelle === '', 'alte Szenarien ohne Kosten');
+});
+
+// --- Jahreswärme-Differenz ---------------------------------------------------------------------------------
+
+// ΔΦ = 2000 W, θ_soll = 20 °C, θ_e = −8 °C (ΔT = 28 K), G = 3000 Kd:
+//   ΔH = 2000 / 28 = 71,43 W/K
+//   ΔQ = 71,43 · 24 · 3000 / 1000 = 5142,9 kWh/a (gerundet 5143)
+//   JAZ 3,5:  ΔStrom = 5142,9 / 3,5 = 1469,4 kWh/a (gerundet 1469)
+//   30 ct/kWh: 1469,4 · 0,30 = 440,8 €/a
+test('Jahreswärme: ΔΦ 2000 W → ΔH 71,43 W/K, ΔQ 5143 kWh/a, mit JAZ 3,5 und 30 ct/kWh: 1469 kWh und 440,8 €/a', () => {
+  const r = berechneJahreswaerme({ deltaPhi: { min: 2000, max: 2000 }, thetaMittel: 20, thetaAussen: -8, gradtage: 3000, jaz: { min: 3.5, max: 3.5 }, strompreis: { min: 30, max: 30 } });
+  gleich(r.deltaH.min, 71.4286, 1e-4, 'ΔH');
+  gleich(r.deltaQ.min, 5142.857, 1e-3, 'ΔQ');
+  wahr(Math.round(r.deltaQ.min) === 5143, 'ΔQ gerundet 5143 kWh/a');
+  gleich(r.deltaStrom.min, 1469.388, 1e-3, 'ΔStrom');
+  wahr(Math.round(r.deltaStrom.min) === 1469, 'ΔStrom gerundet 1469 kWh/a');
+  gleich(r.kosten.min, 440.816, 1e-3, 'Stromkosten');
+  wahr(r.grund === null && r.deltaQ.min === r.deltaQ.max && r.kosten.min === r.kosten.max, 'ohne Unsicherheit ist die Bandbreite ein Punkt');
+});
+
+// Bandbreiten: ΔΦ 1800 bis 2200 W, ΔT = 28 K → ΔH 64,29 bis 78,57 W/K, G = 3000 Kd → ΔQ 4629 bis 5657 kWh/a
+//   JAZ 3 bis 4: kleinstes ΔStrom = 4628,6 / 4 = 1157,1 kWh/a, größtes = 5657,1 / 3 = 1885,7 kWh/a
+//   Preis 25 bis 35 ct/kWh: kleinste Kosten = 1157,1 · 0,25 = 289,3 €/a, größte = 1885,7 · 0,35 = 660,0 €/a
+test('Jahreswärme: Bandbreiten von ΔΦ, JAZ und Strompreis werden durchgereicht (kleinster bis größter Wert)', () => {
+  const r = berechneJahreswaerme({ deltaPhi: { min: 1800, max: 2200 }, thetaMittel: 20, thetaAussen: -8, gradtage: 3000, jaz: { min: 3, max: 4 }, strompreis: { min: 25, max: 35 } });
+  gleich(r.deltaH.min, 64.2857, 1e-4, 'ΔH min'); gleich(r.deltaH.max, 78.5714, 1e-4, 'ΔH max');
+  gleich(r.deltaQ.min, 4628.571, 1e-3, 'ΔQ min'); gleich(r.deltaQ.max, 5657.143, 1e-3, 'ΔQ max');
+  gleich(r.deltaStrom.min, 1157.143, 1e-3, 'ΔStrom min = ΔQ min / JAZ max'); gleich(r.deltaStrom.max, 1885.714, 1e-3, 'ΔStrom max = ΔQ max / JAZ min');
+  gleich(r.kosten.min, 289.286, 1e-3, 'Kosten min'); gleich(r.kosten.max, 660, 1e-9, 'Kosten max');
+  // Mehrbedarf (negatives ΔΦ): die Reihenfolge der Grenzen bleibt richtig
+  const mehr = berechneJahreswaerme({ deltaPhi: { min: -400, max: -200 }, thetaMittel: 20, thetaAussen: -8, gradtage: 3000, jaz: { min: 3, max: 4 }, strompreis: { min: 25, max: 35 } });
+  wahr(mehr.deltaStrom.min <= mehr.deltaStrom.max && mehr.kosten.min <= mehr.kosten.max && mehr.kosten.max < 0, 'negative Werte: min ≤ max');
+});
+
+test('Jahreswärme: ohne Gradtagzahl nur ΔH, ohne JAZ keine Stromrechnung, ungültige Temperatur wird gemeldet', () => {
+  const basis = { deltaPhi: { min: 2000, max: 2000 }, thetaMittel: 20, thetaAussen: -8, jaz: { min: null, max: null }, strompreis: { min: 30, max: 30 } };
+  const ohneG = berechneJahreswaerme({ ...basis, gradtage: null });
+  wahr(ohneG.deltaH && ohneG.deltaQ === null && ohneG.grund === 'Gradtagzahl G fehlt', 'ohne G kein ΔQ');
+  const ohneJaz = berechneJahreswaerme({ ...basis, gradtage: 3000 });
+  wahr(ohneJaz.deltaQ && ohneJaz.deltaStrom === null && ohneJaz.kosten === null, 'ohne JAZ keine Stromwerte');
+  const mitJazOhnePreis = berechneJahreswaerme({ ...basis, gradtage: 3000, jaz: { min: 3.5, max: 3.5 }, strompreis: { min: null, max: null } });
+  wahr(mitJazOhnePreis.deltaStrom && mitJazOhnePreis.kosten === null, 'ohne Preis keine Kosten');
+  wahr(berechneJahreswaerme({ ...basis, thetaMittel: -10, gradtage: 3000 }).grund.includes('nicht über der Normaußentemperatur'), 'θ_soll unter θ_e');
+  wahr(berechneJahreswaerme({ ...basis, deltaPhi: null, gradtage: 3000 }).grund === 'Heizlast nicht berechenbar', 'ohne Heizlast');
+});
+
+// Mini-Haus: Dach U 1,0 → 0,20 mindert um 224 W, θ_soll 20 °C, θ_e −8 °C → ΔH = 224 / 28 = 8,00 W/K
+//   G = 3000 Kd (manuell): ΔQ = 8 · 24 · 3000 / 1000 = 576 kWh/a;  JAZ 3,5: 164,57 kWh/a;  30 ct/kWh: 49,37 €/a
+test('Jahreswärme im Vergleich: Dach-Szenario (224 W) → ΔH 8,00 W/K, ΔQ 576 kWh/a, 164,6 kWh Strom, 49,4 €/a', () => {
+  const ist = mini();
+  ist.einstellungen.vergleich = { gradtage: { quelle: 'manuell', verbrauchId: null, manuell: 3000 }, jaz: { min: 3.5, max: 3.5 }, strompreis: { min: 30, max: 30 } };
+  const sz = neuesSzenario('s', 'Dach gedämmt');
+  sz.abweichungen.bauteile['bt-dach'] = { name: 'Flachdach', u: { min: 0.2, max: 0.2 } };
+  const v = baueVergleich(ist, [sz]);
+  const j = v.spalten[1].jahr;
+  gleich(j.deltaPhi.min, 224, 1e-9, 'ΔΦ'); gleich(j.deltaH.min, 8, 1e-9, 'ΔH = 224 / 28'); gleich(j.deltaQ.min, 576, 1e-9, 'ΔQ = 8 · 24 · 3000 / 1000');
+  gleich(j.deltaStrom.min, 164.5714, 1e-4, 'ΔStrom = 576 / 3,5'); gleich(j.kosten.min, 49.3714, 1e-4, '49,37 €/a');
+  const t = vergleichTabellen(v).jahreswaerme;
+  wahr(t.kopf.join() === 'Kennzahl (Minderung gegenüber dem Ist-Zustand, negativ = Mehrbedarf),Dach gedämmt', t.kopf.join());
+  const zelle = (name) => t.zeilen.find((z) => z[0].startsWith(name))[1];
+  wahr(zelle('Minderung der Gebäudeheizlast') === '224 W' && zelle('Minderung des Wärmeverlusts') === '8,00 W/K' && zelle('Wärmeminderung') === '576 kWh/a', `${zelle('Minderung des Wärmeverlusts')} | ${zelle('Wärmeminderung')}`);
+  wahr(zelle('Stromminderung') === '165 kWh/a' && zelle('Stromkosten-Minderung') === '49,4 €/a', `${zelle('Stromminderung')} | ${zelle('Stromkosten-Minderung')}`);
+  wahr(t.hinweis === JAHRESHINWEIS && JAHRESHINWEIS === 'Schätzung aus der Heizlast, Fremdwärme und Nutzerverhalten nicht berücksichtigt.', 'Pflichthinweis im Wortlaut');
+  wahr(t.annahmen.some((x) => x.includes('θ_soll,Mittel = 20 °C')) && t.annahmen.some((x) => x.includes('3000 Kd (manuell')) && t.annahmen.some((x) => x.includes('Strompreis: 30 ct/kWh')), t.annahmen.join(' | '));
+});
+
+// Beispielhaus: θ_soll,Mittel = (20 · 20 + 22 · 6 + 15 · 8) / (20 + 6 + 8) = 652 / 34 = 19,176 °C (Wohnzimmer, Bad, passiver Flur)
+//   G aus dem Verbrauchsdatensatz: G20/15 = 2450 Kd, 140 Heiztage → G = 2450 − (20 − 19,176) · 140 = 2334,7 Kd
+test('Jahreswärme: G aus dem Verbrauchsdatensatz (Summe der Heizmonate, umgerechnet auf θ_soll,Mittel 19,18 °C) = 2334,7 Kd', async () => {
+  const ist = await beispiel();
+  ist.einstellungen.vergleich = { gradtage: { quelle: 'verbrauch', verbrauchId: 'vb-beispiel', manuell: null }, jaz: { min: 3, max: 4 }, strompreis: { min: 28, max: 34 } };
+  const sz = neuesSzenario('s', 'Dach gedämmt');
+  sz.abweichungen.bauteile['bt-dach'] = { name: 'Flachdach', u: { min: 0.2, max: 0.2 } };
+  const v = baueVergleich(ist, [sz]);
+  gleich(v.thetaMittel, 652 / 34, 1e-12, 'θ_soll,Mittel');
+  gleich(v.gradtage.g, 2450 - (20 - 652 / 34) * 140, 1e-9, 'G aus dem Datensatz');
+  wahr(Math.abs(v.gradtage.g - 2334.7) < 0.05 && v.gradtage.text.includes('Heizperiode 2024/25 (fiktiv)'), v.gradtage.text);
+  const j = v.spalten[1].jahr;
+  const dg = v.spalten[0].ergebnis.gebaeude.guenstig.summe - v.spalten[1].ergebnis.gebaeude.guenstig.summe;
+  const du = v.spalten[0].ergebnis.gebaeude.ungunstig.summe - v.spalten[1].ergebnis.gebaeude.ungunstig.summe;
+  gleich(j.deltaPhi.min, Math.min(dg, du), 1e-9, 'ΔΦ min aus günstig/ungünstig'); gleich(j.deltaPhi.max, Math.max(dg, du), 1e-9, 'ΔΦ max');
+  gleich(j.deltaH.min, j.deltaPhi.min / (652 / 34 + 8), 1e-9, 'ΔH = ΔΦ / (θ_soll,Mittel − θ_e)');
+  gleich(j.deltaQ.max, (j.deltaH.max * 24 * v.gradtage.g) / 1000, 1e-9, 'ΔQ = ΔH · 24 · G / 1000');
+  wahr(j.deltaPhi.min < j.deltaPhi.max && j.deltaQ.min < j.deltaQ.max && j.kosten.min < j.kosten.max, 'echte Bandbreiten');
+  // Ohne Verbrauchsdatensatz fehlt G
+  ist.einstellungen.vergleich.gradtage.verbrauchId = null;
+  const ohne = baueVergleich(ist, [sz]);
+  wahr(ohne.gradtage.g === null && ohne.spalten[1].jahr.deltaQ === null && vergleichTabellen(ohne).jahreswaerme.zeilen.find((z) => z[0].startsWith('Wärmeminderung'))[1].includes('Gradtagzahl G fehlt'), 'ohne Datensatz: G fehlt');
+  // Annahmen: Vorgaben bei fehlenden Einstellungen
+  const a = vergleichsannahmen({});
+  wahr(a.gradtage.quelle === 'verbrauch' && a.jaz.min === null && a.strompreis.max === null, 'Vorgaben');
+  wahr(loeseGradtageAuf([], vergleichsannahmen({ vergleich: { gradtage: { quelle: 'manuell', manuell: 2500 } } }), 20).g === 2500, 'manuell');
+});
+
+// --- Auslegungswert und Kosten im Vergleich ---------------------------------------------------------------
+
+test('Vergleich: „Auslegungswert Wärmepumpe (obere Grenze)“ ist die obere Grenze der Gebäudeheizlast und hervorgehoben', async () => {
+  const ist = await beispiel();
+  const sz = neuesSzenario('s', 'Dach gedämmt');
+  sz.abweichungen.bauteile['bt-dach'] = { name: 'Flachdach', u: { min: 0.2, max: 0.2 } };
+  sz.kosten = { investition: { min: 8000, max: 12000 }, foerderung: { min: 2000, max: 3000 }, quelle: 'Angebot Dachdecker vom 01.10.2026' };
+  const v = baueVergleich(ist, [sz]);
+  const t = vergleichTabellen(v).kennzahlen;
+  wahr(AUSLEGUNGSWERT === 'Auslegungswert Wärmepumpe (obere Grenze)', 'Beschriftung');
+  const index = t.zeilen.findIndex((z) => z[0] === AUSLEGUNGSWERT);
+  wahr(index === 1 && t.hervor.includes(index), 'zweite Zeile, hervorgehoben');
+  wahr(t.zeilen[index][1] === '3816 W', `Ist: ${t.zeilen[index][1]}`);
+  gleich(Number.parseFloat(t.zeilen[index][2]), Math.round(v.spalten[1].bandbreite.max), 1, 'Szenario: obere Grenze');
+  wahr(v.spalten[1].bandbreite.max < v.spalten[0].bandbreite.max, 'das Szenario senkt den Auslegungswert');
+  const zeile = (name) => t.zeilen.find((z) => z[0].startsWith(name));
+  wahr(zeile('Investitionskosten')[1] === '–' && zeile('Investitionskosten')[2] === '8000 – 12000 €', zeile('Investitionskosten').join(' | '));
+  wahr(zeile('Förderung')[2] === '2000 – 3000 €' && zeile('Kosten nach Förderung')[2] === '5000 – 10000 €', 'Förderung und Kosten nach Förderung');
+  wahr(zeile('Quelle der Kosten')[2] === 'Angebot Dachdecker vom 01.10.2026', 'Quelle');
+  const reihenfolge = t.zeilen.map((z) => z[0]);
+  wahr(reihenfolge.indexOf('Gebäudeheizlast, Mittelwert') < reihenfolge.findIndex((x) => x.startsWith('Minderung')) && reihenfolge.findIndex((x) => x.startsWith('Minderung')) < reihenfolge.findIndex((x) => x.startsWith('Kosten nach Förderung')), 'Kosten stehen neben Heizlast und Minderung');
+  // ohne Kosten steht „–“
+  const ohne = vergleichTabellen(baueVergleich(ist, [neuesSzenario('o', 'Ohne')])).kennzahlen;
+  wahr(ohne.zeilen.find((z) => z[0].startsWith('Kosten nach Förderung'))[2] === '–', 'ohne Eingabe „–“');
+});
+
+test('Export und Import erhalten Kosten und Vergleichsannahmen; der Bericht zeigt Auslegungswert, Jahreswärme und Kosten', async () => {
+  const text = await ladeText();
+  const speicher = pruefeImport(text).daten;
+  speicher.settings[0].vergleich = { gradtage: { quelle: 'manuell', verbrauchId: null, manuell: 2800 }, jaz: { min: 3, max: 3.5 }, strompreis: { min: 28, max: 32 } };
+  const sz = neuesSzenario('s1', 'Dach gedämmt', jetzt);
+  sz.abweichungen.bauteile['bt-dach'] = { name: 'Flachdach', u: { min: 0.2, max: 0.2 } };
+  sz.kosten = { investition: { min: 8000, max: 12000 }, foerderung: { min: 2000, max: 3000 }, quelle: 'Angebot Dachdecker' };
+  speicher.scenarios = [sz];
+  const zurueck = pruefeImport(JSON.stringify(baueExport(speicher, jetzt)));
+  wahr(zurueck.ok, 'Import');
+  wahr(JSON.stringify(zurueck.daten.scenarios[0].kosten) === JSON.stringify(sz.kosten), 'Kosten bleiben erhalten');
+  wahr(JSON.stringify(zurueck.daten.settings[0].vergleich) === JSON.stringify(speicher.settings[0].vergleich), 'Vergleichsannahmen bleiben erhalten');
+
+  const ist = projektAusSpeicher(zurueck.daten);
+  const b = baueVergleichsBericht(ist, zurueck.daten.scenarios, jetzt);
+  const json = JSON.stringify(b);
+  wahr(json.includes('Auslegungswert Wärmepumpe (obere Grenze)') && json.includes(JAHRESHINWEIS), 'Auslegungswert und Pflichthinweis im Bericht');
+  const kennzahlen = b.abschnitte.flatMap((x) => x.bloecke).find((x) => x.art === 'tabelle');
+  wahr(kennzahlen.hervor.includes(1) && kennzahlen.zeilen[1][0] === AUSLEGUNGSWERT, 'Zeile im Bericht hervorgehoben');
+  wahr(json.includes('Wärmeminderung ΔQ pro Jahr') && json.includes('Stromkosten-Minderung pro Jahr') && json.includes('2800 Kd (manuell'), 'Jahreswärme mit Annahmen');
+  wahr(json.includes('5000 – 10000 €') && json.includes('Angebot Dachdecker'), 'Kosten im Bericht');
+  const einzel = baueBericht(wendeSzenarioAn(ist, zurueck.daten.scenarios[0]).projekt, jetzt, { szenario: szenarioInfo(ist, zurueck.daten.scenarios[0]) });
+  wahr(JSON.stringify(einzel).includes('Kosten nach Förderung') && JSON.stringify(einzel).includes('5000 – 10000 €'), 'Kosten im Bericht für das einzelne Szenario');
 });
