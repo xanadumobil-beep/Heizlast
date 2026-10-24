@@ -9,6 +9,7 @@ import { VORLAUF_MAX } from './engine/vorlauf.js';
 import { berechneAnsicht, VERLUST_ARTEN } from './vergleich.js';
 import { pruefeVollstaendigkeit } from './plan.js';
 import { flaecheAusMassen, mittlereInnentemperatur } from './modell.js';
+import { heizkurve, schwellen } from './geraete.js';
 import { leistungFehlt, auswerten, abweichungsText, wattBereichVon, watt } from './anzeige.js';
 
 export const AUSSENTEMPERATUREN = [-8, -5, -2, 2, 7, 12];
@@ -167,6 +168,12 @@ function verlustZeilen(verluste) {
   };
 }
 
+// Heizkurve zur Heizlastlinie: Vorlauftemperatur je Außentemperatur, linear von θ_soll,Mittel bis zum nötigen Vorlauf Y bei θ_e (mindestens 25 °C).
+function mitHeizkurve(linie, vorlauf) {
+  if (!linie.ok || vorlauf.art !== 'ok') return linie;
+  return { ...linie, vorlaufY: vorlauf.grad, punkte: linie.punkte.map((p) => ({ ...p, vorlauf: heizkurve(linie.thetaMittel, linie.thetaAussen, vorlauf.grad, p.theta) })) };
+}
+
 // projekt: Projekt (Ist-Zustand oder Szenario, mit angewendeten Abweichungen). optionen.mitVerbrauch: Verbrauchsabgleich auswerten.
 export function baueErgebnis(projekt, { mitVerbrauch = true } = {}) {
   const a = berechneAnsicht(projekt);
@@ -200,7 +207,8 @@ export function baueErgebnis(projekt, { mitVerbrauch = true } = {}) {
     verluste: verlustZeilen(a.verluste),
     waermepumpe: { obereW: obere, zuschlaege: liste, gesamtW: gesamt, vorlauf: vorlaufDesHauses(a) },
     thetaMittel,
-    linie: heizlastLinie(a.bandbreite, thetaMittel, thetaAussen),
+    linie: mitHeizkurve(heizlastLinie(a.bandbreite, thetaMittel, thetaAussen), vorlaufDesHauses(a)),
+    schwellen: schwellen(projekt.einstellungen),
     verbrauch,
   };
 }
@@ -229,7 +237,7 @@ export function zaehlerText(z) {
 
 // Heizlastlinie als Tabelle: Außentemperatur, untere und obere Grenze in kW.
 export function liniePunktText(p) {
-  return { theta: `${mitMinus(p.theta, 0)} °C`, min: kW(p.min, 1), max: kW(p.max, 1) };
+  return { theta: `${mitMinus(p.theta, 0)} °C`, min: kW(p.min, 1), max: kW(p.max, 1), vorlauf: p.vorlauf === undefined ? '–' : `${formatZahl(p.vorlauf, 1)} °C` };
 }
 
 // --- Berichtsblöcke ---------------------------------------------------------------------------------------------
@@ -291,10 +299,13 @@ export function ergebnisBloecke(erg) {
 
   bloecke.push(zwischentitel('Heizlast bei verschiedenen Außentemperaturen'));
   if (erg.linie.ok) {
-    bloecke.push(tabelle(['Außentemperatur', 'Untere Grenze', 'Obere Grenze'], erg.linie.punkte.map((p) => {
+    bloecke.push(tabelle(['Außentemperatur', 'Untere Grenze', 'Obere Grenze', 'Vorlauf (Heizkurve)'], erg.linie.punkte.map((p) => {
       const t = liniePunktText(p);
-      return [t.theta, t.min, t.max];
-    }), 'lrr'));
+      return [t.theta, t.min, t.max, t.vorlauf];
+    }), 'lrrr'));
+    if (erg.linie.vorlaufY !== undefined) {
+      bloecke.push(text(`Heizkurve linear: t_V(θ) = θ_soll,Mittel + (Y − θ_soll,Mittel) · (θ_soll,Mittel − θ) / (θ_soll,Mittel − θ_e) mit Y = ${formatZahl(erg.linie.vorlaufY, 1)} °C bei θ_e, mindestens 25 °C.`));
+    }
     bloecke.push(text(`Linear nach H = Heizlast / (θ_soll,Mittel − θ_e) mit θ_soll,Mittel = ${formatZahl(erg.linie.thetaMittel, 1)} °C: `
       + `H = ${formatZahl(erg.linie.hMin, 1)} bis ${formatZahl(erg.linie.hMax, 1)} W/K.`));
     bloecke.push(box(MILD_HINWEIS));

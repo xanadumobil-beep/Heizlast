@@ -9,6 +9,7 @@ import { baueBericht, baueVergleichsBericht } from '../bericht.js';
 import { wendeSzenarioAn, szenarioInfo } from '../szenario.js';
 import { geometrie } from '../planlayout.js';
 import { zeichnePlan, legende } from '../planzeichnung.js';
+import { normalisiereWaermepumpe } from '../schemas.js';
 
 function tabelle(b) {
   const klasse = (i) => (b.ausrichtung[i] === 'r' ? 'r' : '');
@@ -97,7 +98,8 @@ function baueGewaehlt(wahl, ist, szenarien, jetzt, extra = {}) {
 }
 
 export async function renderBericht(container) {
-  const [ist, szenarien, aktiv, fotos, hintergruendeListe] = await Promise.all([ladeIstProjekt(), ladeSzenarien(), ladeAktivesSzenario(), db.alle('photos'), db.alle('backgrounds')]);
+  const [ist, szenarien, aktiv, fotos, hintergruendeListe, katalogRoh] = await Promise.all([ladeIstProjekt(), ladeSzenarien(), ladeAktivesSzenario(), db.alle('photos'), db.alle('backgrounds'), db.alle('heatpumps')]);
+  const katalog = katalogRoh.map(normalisiereWaermepumpe);
   const jetzt = new Date();
   const hintergruende = new Map(hintergruendeListe.map((b) => [b.geschoss, b]));
   const fotoUrls = new Map();
@@ -149,7 +151,7 @@ export async function renderBericht(container) {
   };
 
   const zeige = () => {
-    const extra = mitFotos ? { fotoAnhang: fotoAnhang(ist, ist.fotoInfos, ist.markierungen, fotoWahl) } : {};
+    const extra = { ...(mitFotos ? { fotoAnhang: fotoAnhang(ist, ist.fotoInfos, ist.markierungen, fotoWahl) } : {}), waermepumpen: katalog };
     bericht = baueGewaehlt(wahl, ist, szenarien, jetzt, extra);
     const ctx = {
       fotoUrls: new Map(fotos.filter((f) => extra.fotoAnhang?.some((e) => e.fotoId === f.id)).map((f) => [f.id, adresse(fotoUrls, f.id, f.blob)])),
@@ -169,7 +171,7 @@ export async function renderBericht(container) {
       zusatz,
       el(
         'p', { class: 'beschreibung' },
-        'So sieht der Ausdruck aus. Er enthält Projektdaten, Bauteilkatalog, Räume mit Heizlast, Heizkörper mit Vorlauftemperaturen, '
+        'So sieht der Ausdruck aus. Er enthält Projektdaten, Bauteilkatalog, Räume mit Heizlast, Heizkörper mit Vorlauftemperaturen, die Geräteprüfung der Wärmepumpen, '
         + 'die Gebäudeheizlast als Bandbreite, den Verbrauchsabgleich und alle Annahmen. Gewählt wird der Ist-Zustand, ein Szenario oder der Szenarienvergleich.',
       ),
       el(

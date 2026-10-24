@@ -12,16 +12,20 @@ import { formatZahl } from './engine/format.js';
 const TOL = 1e-9;
 export const MAX_EXTRAPOLATION_K = 3;
 
-// Schwellen der Ampeln. Die Werte für Vorauswahl und Takt stammen aus der Aufgabenstellung, die Schwellen für Deckung und
-// Bivalenzpunkt sind Annahmen der App und werden in der Oberfläche genannt.
-export const SCHWELLEN = {
-  vorauswahlGruen: [0.9, 1.3],
-  vorauswahlGelb: [0.75, 1.6],
-  deckungGruen: 100, // % der oberen Grenze
-  deckungGelb: 85,
-  bivalenzGelbBis: -5, // °C: Bivalenzpunkt höchstens so hoch ist gelb, höher ist rot
-};
+// Grenzen der Vorauswahl (fest). Verhältnis BAFA-Nennleistung 55 °C zur oberen Grenze der Heizlast.
+export const VORAUSWAHL_GRENZEN = { gruen: [0.9, 1.3], gelb: [0.75, 1.6] };
 
+// Ampelgrenzen von Bivalenzpunkt und Deckung: einstellbar unter Grundlagen → Rechenannahmen (einstellungen.geraetepruefung).
+//   Bivalenzpunkt: grün bis bivalenzGruen °C, gelb bis bivalenzGelb °C, darüber rot.
+//   Deckung bei θ_e: grün ab deckungGruen %, gelb ab deckungGelb %, darunter rot.
+export const STANDARD_SCHWELLEN = { bivalenzGruen: -4, bivalenzGelb: -1, deckungGruen: 80, deckungGelb: 65 };
+
+export function schwellen(einstellungen) {
+  const e = einstellungen?.geraetepruefung ?? {};
+  return Object.fromEntries(Object.entries(STANDARD_SCHWELLEN).map(([k, v]) => [k, typeof e[k] === 'number' && Number.isFinite(e[k]) ? e[k] : v]));
+}
+
+export const BIVALENZ_HINWEIS = 'Ein Bivalenzpunkt um −5 °C ist bei monoenergetischen Luft-Wasser-Wärmepumpen üblich. Ein Gerät ohne Heizstabbedarf bis zur Normaußentemperatur ist meist überdimensioniert und taktet in der Übergangszeit.';
 export const VORAUSWAHL_HINWEIS = 'Vorauswahl, nicht für die Auslegung. Die BAFA-Nennleistung bezieht sich auf eine Auslegung bei −10 °C (EU-Durchschnittsklima), nicht auf den Standort des Hauses.';
 export const BAFA_HINWEIS = 'Die BAFA-Nennleistung ist kein Auslegungswert. Für die Prüfung die Heizleistung aus dem Datenblatt verwenden.';
 
@@ -53,17 +57,18 @@ export function interpoliere(werte, x) {
   return { ok: true, wert, extrapoliert: x < lo - TOL || x > hi + TOL || Boolean(a.extrapoliert) || Boolean(b.extrapoliert) };
 }
 
-const punkteMitMax = (g) => (g.punkte ?? []).filter((p) => istZahl(p.aussen) && istZahl(p.vorlauf) && istZahl(p.max));
+const punkteMit = (g, feld) => (g.punkte ?? []).filter((p) => istZahl(p.aussen) && istZahl(p.vorlauf) && istZahl(p[feld]));
+const punkteMitMax = (g) => punkteMit(g, 'max');
 
 // Maximale Heizleistung je Außentemperatur bei der Vorlauftemperatur y: [{ x: Außentemperatur, y: kW, extrapoliert }].
 // Je Außentemperatur wird über die Vorlauftemperatur interpoliert, Außentemperaturen ohne brauchbare Punkte entfallen.
-export function leistungsStufen(g, vorlauf) {
+export function leistungsStufen(g, vorlauf, feld = 'max') {
   const nachAussen = new Map();
-  for (const p of punkteMitMax(g)) {
+  for (const p of punkteMit(g, feld)) {
     const schluessel = Math.round(p.aussen * 1000);
     if (!nachAussen.has(schluessel)) nachAussen.set(schluessel, { aussen: p.aussen, punkte: [] });
     const eintrag = nachAussen.get(schluessel);
-    if (!eintrag.punkte.some((q) => Math.abs(q.x - p.vorlauf) <= TOL)) eintrag.punkte.push({ x: p.vorlauf, y: p.max });
+    if (!eintrag.punkte.some((q) => Math.abs(q.x - p.vorlauf) <= TOL)) eintrag.punkte.push({ x: p.vorlauf, y: p[feld] });
   }
   const stufen = [];
   for (const { aussen, punkte } of nachAussen.values()) {
@@ -73,12 +78,29 @@ export function leistungsStufen(g, vorlauf) {
   return stufen.sort((a, b) => a.x - b.x);
 }
 
-// Maximale Heizleistung bei Außentemperatur theta und Vorlauftemperatur vorlauf.
+// Leistung (feld 'max' oder 'min') bei Außentemperatur theta und Vorlauftemperatur vorlauf. Die Regeln sind für beide gleich.
 // Rückgabe { ok: true, kW, extrapoliert } oder { ok: false, grund }.
-export function maxLeistung(g, theta, vorlauf) {
-  const r = interpoliere(leistungsStufen(g, vorlauf), theta);
+export function leistung(g, theta, vorlauf, feld = 'max') {
+  const r = interpoliere(leistungsStufen(g, vorlauf, feld), theta);
   if (!r.ok) return { ok: false, grund: 'Datenblattpunkte reichen nicht' };
   return { ok: true, kW: r.wert, extrapoliert: r.extrapoliert };
+}
+export const maxLeistung = (g, theta, vorlauf) => leistung(g, theta, vorlauf, 'max');
+export const minLeistung = (g, theta, vorlauf) => leistung(g, theta, vorlauf, 'min');
+
+// Datenblattpunkt mit der kleinsten Entfernung (Summe der Beträge der Abweichungen von Außen- und Vorlauftemperatur).
+function naechsterPunkt(g, theta, vorlauf, feld) {
+  const punkte = punkteMit(g, feld);
+  if (punkte.length === 0) return null;
+  const abstand = (p) => Math.abs(p.aussen - theta) + Math.abs(p.vorlauf - vorlauf);
+  return punkte.reduce((a, b) => (abstand(b) < abstand(a) - TOL || (Math.abs(abstand(b) - abstand(a)) <= TOL && b[feld] < a[feld]) ? b : a));
+}
+
+// Heizkurve: Vorlauftemperatur bei Außentemperatur theta, linear von θ_soll,Mittel (bei theta = θ_soll,Mittel) bis Y (bei θ_e), mindestens 25 °C.
+//   t_V(θ) = θ_soll + (Y − θ_soll) · (θ_soll − θ) / (θ_soll − θ_e)
+export const HEIZKURVE_MIN = 25;
+export function heizkurve(thetaSoll, thetaE, vorlaufY, theta) {
+  return Math.max(HEIZKURVE_MIN, thetaSoll + ((vorlaufY - thetaSoll) * (thetaSoll - theta)) / (thetaSoll - thetaE));
 }
 
 // --- Pflichtwerte ------------------------------------------------------------------------------
@@ -101,8 +123,8 @@ const hatDatenblatt = (g) => punkteMitMax(g).length > 0;
 // Vorauswahl (Stufe A): BAFA-Nennleistung 55 °C geteilt durch die obere Grenze der Heizlast.
 export function vorauswahl(nennleistung, obereKW) {
   const r = nennleistung / obereKW;
-  const [gl, gh] = SCHWELLEN.vorauswahlGruen;
-  const [yl, yh] = SCHWELLEN.vorauswahlGelb;
+  const [gl, gh] = VORAUSWAHL_GRENZEN.gruen;
+  const [yl, yh] = VORAUSWAHL_GRENZEN.gelb;
   const ampel = r >= gl - TOL && r <= gh + TOL ? 'gruen' : r >= yl - TOL && r <= yh + TOL ? 'gelb' : 'rot';
   return { verhaeltnis: r, ampel };
 }
@@ -135,21 +157,38 @@ export function bivalenz(g, vorlauf, linie, thetaE) {
   return { ...ergebnis, art: 'kein_schnitt', theta: null, heizstab };
 }
 
-// Taktprüfung: kleinste Leistung gegen die untere Grenze der Heizlast bei +7 °C, +2 °C und +12 °C.
-// Grün: minimale Leistung höchstens so groß wie die Heizlast bei +7 °C; gelb: nur bis +2 °C; rot sonst.
-// Als minimale Leistung gilt der Punkt bei A7 oder höher, dessen Vorlauftemperatur der nötigen am nächsten liegt (ohne Vorlauf: der kleinste).
-export function takt(g, linie, vorlauf = null) {
-  const punkte = minimalPunkte(g);
-  if (punkte.length === 0) return { ok: false, grund: 'minimale Heizleistung bei A7 oder höher' };
-  const abstand = (p) => (istZahl(vorlauf) && istZahl(p.vorlauf) ? Math.abs(p.vorlauf - vorlauf) : 0);
-  const punkt = punkte.reduce((a, b) => (abstand(b) < abstand(a) || (abstand(b) === abstand(a) && b.min < a.min) ? b : a));
+const bivalenzAmpel = (theta, sw) => (theta <= sw.bivalenzGruen + TOL ? 'gruen' : theta <= sw.bivalenzGelb + TOL ? 'gelb' : 'rot');
+const deckungAmpel = (prozent, sw) => (prozent >= sw.deckungGruen - TOL ? 'gruen' : prozent >= sw.deckungGelb - TOL ? 'gelb' : 'rot');
+
+// Taktprüfung: kleinste Leistung gegen die untere Grenze der Heizlast bei +7 °C und +2 °C (und zur Information +12 °C).
+// Die Vorlauftemperatur je Außentemperatur kommt aus der Heizkurve (heizkurve, Y = nötiger Vorlauf bei θ_e). Die minimale Leistung wird
+// bei diesem Vorlauf aus den Datenblattpunkten interpoliert (gleiche Regeln wie bei der maximalen Leistung). Gibt es keinen passenden Punkt,
+// gilt der nächstliegende Datenblattpunkt, das steht im Ergebnis (quelle 'naechster').
+// Ohne bekannten Vorlauf Y gilt der kleinste Wert bei A7 oder höher (quelle 'kleinster').
+// Grün: minimale Leistung bei +7 °C höchstens so groß wie die Heizlast bei +7 °C; gelb: nur bis +2 °C (minimale Leistung bei +2 °C
+// höchstens die Heizlast bei +2 °C); sonst rot.
+export function takt(g, linie, vorlaufY = null, thetaE = linie.thetaAussen) {
+  const warm = (g.punkte ?? []).filter((p) => istZahl(p.aussen) && p.aussen >= 7 - 0.01 && istZahl(p.min));
+  if (warm.length === 0) return { ok: false, grund: 'minimale Heizleistung bei A7 oder höher' };
   const hMin = linie.hMin / 1000;
   const last = (t) => hMin * Math.max(linie.thetaMittel - t, 0);
-  const l7 = last(7);
-  const l2 = last(2);
-  const l12 = last(12);
-  const ampel = punkt.min <= l7 + TOL ? 'gruen' : punkt.min <= l2 + TOL ? 'gelb' : 'rot';
-  return { ok: true, min: punkt.min, punkt, l7, l2, l12, ampel };
+  const bei = (theta) => {
+    if (!istZahl(vorlaufY)) {
+      const p = warm.reduce((a, b) => (b.min < a.min ? b : a));
+      return { theta, kW: p.min, quelle: 'kleinster', punkt: p, vorlauf: null };
+    }
+    const tv = heizkurve(linie.thetaMittel, thetaE, vorlaufY, theta);
+    const r = minLeistung(g, theta, tv);
+    if (r.ok) return { theta, kW: r.kW, quelle: 'interpoliert', extrapoliert: r.extrapoliert, vorlauf: tv };
+    const p = naechsterPunkt(g, theta, tv, 'min');
+    return { theta, kW: p.min, quelle: 'naechster', punkt: p, vorlauf: tv };
+  };
+  const m7 = bei(7);
+  const m2 = bei(2);
+  const m12 = bei(12);
+  const [l7, l2, l12] = [last(7), last(2), last(12)];
+  const ampel = m7.kW <= l7 + TOL ? 'gruen' : m2.kW <= l2 + TOL ? 'gelb' : 'rot';
+  return { ok: true, min: m7.kW, m7, m2, m12, l7, l2, l12, ampel };
 }
 
 // ETAs (Raumheizungs-Jahresnutzungsgrad) bei der Vorlauftemperatur: linear zwischen 35 und 55 °C, außerhalb höchstens 3 K.
@@ -175,6 +214,7 @@ export function kontextAusErgebnis(erg) {
     vorlaufGrund: v.art === 'ok' ? null : v.text,
     linie: erg.linie.ok ? erg.linie : null,
     linieGrund: erg.linie.ok ? null : erg.linie.grund,
+    schwellen: erg.schwellen ?? STANDARD_SCHWELLEN,
   };
 }
 
@@ -200,36 +240,40 @@ export function pruefeGeraet(g, k) {
   }
 
   if (stufe === 'B') {
+    const sw = k.schwellen ?? STANDARD_SCHWELLEN;
     const bedarfMax = [...yFehlt, ...fehlend.filter((f) => f.startsWith('maximale'))];
     // Deckung bei Auslegung
     if (bedarfMax.length > 0) {
-      kriterien.push(nichtPruefbar('deckung', 'Deckung bei Auslegung', bedarfMax));
+      kriterien.push(nichtPruefbar('deckung', `Deckung bei ${grad(k.thetaE)}`, bedarfMax));
       kriterien.push(nichtPruefbar('bivalenz', 'Bivalenzpunkt', bedarfMax));
     } else if (!k.linie) {
-      kriterien.push(nichtPruefbar('deckung', 'Deckung bei Auslegung', [k.linieGrund ?? 'Heizlastlinie']));
+      kriterien.push(nichtPruefbar('deckung', `Deckung bei ${grad(k.thetaE)}`, [k.linieGrund ?? 'Heizlastlinie']));
       kriterien.push(nichtPruefbar('bivalenz', 'Bivalenzpunkt', [k.linieGrund ?? 'Heizlastlinie']));
     } else {
       const p = maxLeistung(g, k.thetaE, k.vorlauf);
       if (!p.ok) {
-        kriterien.push({ ...nichtPruefbar('deckung', 'Deckung bei Auslegung', []), text: `Datenblattpunkte reichen nicht: bei ${grad(k.thetaE)} und ${grad(k.vorlauf)} Vorlauf liegt keine Leistung innerhalb von ${MAX_EXTRAPOLATION_K} K um die Punkte.` });
+        kriterien.push({ ...nichtPruefbar('deckung', `Deckung bei ${grad(k.thetaE)}`, []), text: `Datenblattpunkte reichen nicht: bei ${grad(k.thetaE)} und ${grad(k.vorlauf)} Vorlauf liegt keine Leistung innerhalb von ${MAX_EXTRAPOLATION_K} K um die Punkte.` });
         kriterien.push({ ...nichtPruefbar('bivalenz', 'Bivalenzpunkt', []), text: 'Datenblattpunkte reichen nicht.' });
       } else {
         const deckung = (p.kW / k.obereKW) * 100;
-        const ampel = deckung >= SCHWELLEN.deckungGruen - TOL ? 'gruen' : deckung >= SCHWELLEN.deckungGelb ? 'gelb' : 'rot';
         kriterien.push({
-          id: 'deckung', name: 'Deckung bei Auslegung', ampel, wert: `${formatZahl(deckung, 1)} %`, sort: -deckung,
-          text: `${kW(p.kW)} maximal bei ${grad(k.thetaE)} und ${grad(k.vorlauf)} Vorlauf${p.extrapoliert ? ' (bis 3 K über die Datenblattpunkte hinaus fortgesetzt)' : ''}, obere Grenze der Heizlast ${kW(k.obereKW)}. Grün ab 100 %, gelb ab 85 %.`,
+          id: 'deckung', name: `Deckung bei ${grad(k.thetaE)}`, ampel: deckungAmpel(deckung, sw), wert: `${formatZahl(deckung, 1)} %`, sort: -deckung,
+          text: `${kW(p.kW)} maximal bei ${grad(k.thetaE)} und ${grad(k.vorlauf)} Vorlauf${p.extrapoliert ? ' (bis 3 K über die Datenblattpunkte hinaus fortgesetzt)' : ''}, obere Grenze der Heizlast ${kW(k.obereKW)}. Grün ab ${formatZahl(sw.deckungGruen, 0)} %, gelb ab ${formatZahl(sw.deckungGelb, 0)} %.`,
         });
         const b = bivalenz(g, k.vorlauf, k.linie, k.thetaE);
+        const grenzen = `Grün bis ${grad(sw.bivalenzGruen)}, gelb bis ${grad(sw.bivalenzGelb)}, darüber rot.`;
         if (!b.ok) {
           kriterien.push({ ...nichtPruefbar('bivalenz', 'Bivalenzpunkt', []), text: 'Datenblattpunkte reichen nicht.' });
         } else if (b.art === 'kein_heizstab') {
-          kriterien.push({ id: 'bivalenz', name: 'Bivalenzpunkt', ampel: 'gruen', wert: `unter ${grad(k.thetaE)}`, sort: -1000, text: `Kein Heizstab nötig: Die Leistung reicht bis ${grad(k.thetaE)}.` });
-        } else if (b.art === 'punkt') {
-          const ampel2 = b.theta <= SCHWELLEN.bivalenzGelbBis ? 'gelb' : 'rot';
           kriterien.push({
-            id: 'bivalenz', name: 'Bivalenzpunkt', ampel: ampel2, wert: grad(Math.round(b.theta * 10) / 10), sort: b.theta,
-            text: `Unterhalb von ${grad(Math.round(b.theta * 10) / 10)} deckt ein Heizstab den Rest, bei ${grad(k.thetaE)} sind es ${kW(b.heizstab)}. Gelb bis −5 °C, darüber rot.`,
+            id: 'bivalenz', name: 'Bivalenzpunkt', ampel: bivalenzAmpel(k.thetaE, sw), wert: `unter ${grad(k.thetaE)}`, sort: -1000,
+            text: `Kein Heizstab nötig: Die Leistung reicht bis ${grad(k.thetaE)}. Ein Gerät ohne Heizstabbedarf bis zur Normaußentemperatur ist meist überdimensioniert und taktet in der Übergangszeit, siehe Taktprüfung. ${grenzen}`,
+          });
+        } else if (b.art === 'punkt') {
+          const gerundet = Math.round(b.theta * 10) / 10;
+          kriterien.push({
+            id: 'bivalenz', name: 'Bivalenzpunkt', ampel: bivalenzAmpel(b.theta, sw), wert: grad(gerundet), sort: b.theta,
+            text: `Unterhalb von ${grad(gerundet)} deckt ein Heizstab den Rest, bei ${grad(k.thetaE)} sind es ${kW(b.heizstab)}. ${grenzen}`,
           });
         } else {
           kriterien.push({ id: 'bivalenz', name: 'Bivalenzpunkt', ampel: 'rot', wert: 'nicht erreicht', sort: 1000, text: `Die Leistung erreicht die Heizlastlinie im Bereich der Datenblattpunkte nicht. Bei ${grad(k.thetaE)} fehlen ${kW(b.heizstab)}.` });
@@ -237,20 +281,24 @@ export function pruefeGeraet(g, k) {
       }
     }
     // Takt
-    const t = k.linie ? takt(g, k.linie, k.vorlauf) : { ok: false, grund: k.linieGrund ?? 'Heizlastlinie' };
+    const t = k.linie ? takt(g, k.linie, k.vorlauf, k.thetaE) : { ok: false, grund: k.linieGrund ?? 'Heizlastlinie' };
     if (!t.ok) kriterien.push(nichtPruefbar('takt', 'Taktprüfung', [t.grund]));
     else {
-      const text = `Minimale Leistung ${kW(t.min)} (A${t.punkt.aussen}/W${t.punkt.vorlauf}) gegen die Heizlast (untere Grenze): ${kW(t.l7)} bei +7 °C, ${kW(t.l2)} bei +2 °C, ${kW(t.l12)} bei +12 °C. `
-        + 'Grün, wenn die minimale Leistung höchstens die Heizlast bei +7 °C beträgt, gelb bis +2 °C, sonst rot.';
-      kriterien.push({ id: 'takt', name: 'Taktprüfung', ampel: t.ampel, wert: `${kW(t.min)} min.`, text, sort: t.min - t.l7 });
+      const quelle = (m) => (m.quelle === 'interpoliert' ? `bei ${grad(Math.round(m.vorlauf * 10) / 10)} Vorlauf (Heizkurve) interpoliert${m.extrapoliert ? ', bis 3 K fortgesetzt' : ''}`
+        : m.quelle === 'naechster' ? `kein passender Punkt für ${grad(Math.round(m.vorlauf * 10) / 10)} Vorlauf, nächstliegender Datenblattpunkt A${m.punkt.aussen}/W${m.punkt.vorlauf} genommen`
+          : 'ohne nötigen Vorlauf: kleinster Wert bei A7 oder höher');
+      const zeile = (m, l) => `${m.theta > 0 ? '+' : ''}${grad(m.theta)}: ${kW(m.kW)} (${quelle(m)}) gegen Heizlast ${kW(l)}`;
+      const text = `Minimale Leistung gegen die Heizlast (untere Grenze). ${zeile(t.m7, t.l7)}. ${zeile(t.m2, t.l2)}. ${zeile(t.m12, t.l12)}. `
+        + 'Grün, wenn die minimale Leistung bei +7 °C höchstens die Heizlast bei +7 °C beträgt, gelb, wenn das erst bei +2 °C gilt, sonst rot.';
+      kriterien.push({ id: 'takt', name: 'Taktprüfung', ampel: t.ampel, wert: `${kW(t.m7.kW)} min. bei +7 °C`, text, sort: t.m7.kW - t.l7 });
     }
   }
 
   // Effizienz und Schall gelten für beide Stufen, soweit die Werte da sind
   const e = k.vorlauf === null ? { ok: false, grund: k.vorlaufGrund ?? 'nötige Vorlauftemperatur' } : effizienz(g, k.vorlauf);
-  if (e.ok) kriterien.push({ id: 'effizienz', name: 'Effizienz (ETAs bei nötigem Vorlauf)', ampel: 'grau', wert: `${formatZahl(e.eta, 0)} %`, text: `Linear zwischen ETAs 35 °C und 55 °C bei ${grad(k.vorlauf)} Vorlauf.`, sort: -e.eta, relativ: 'hoch' });
+  if (e.ok) kriterien.push({ id: 'effizienz', name: 'Effizienz (ETAs bei nötigem Vorlauf)', ampel: 'grau', wert: `${formatZahl(e.eta, 0)} %`, text: `Linear zwischen ETAs 35 °C und 55 °C bei ${grad(k.vorlauf)} Vorlauf.`, sort: -e.eta, rangfolge: true });
   else kriterien.push(nichtPruefbar('effizienz', 'Effizienz (ETAs bei nötigem Vorlauf)', [e.grund]));
-  if (istZahl(g.schall)) kriterien.push({ id: 'schall', name: 'Schall (Außengerät)', ampel: 'grau', wert: `${formatZahl(g.schall, 0)} dB(A)`, text: 'Schallleistungspegel laut Katalog.', sort: g.schall, relativ: 'niedrig' });
+  if (istZahl(g.schall)) kriterien.push({ id: 'schall', name: 'Schall (Außengerät)', ampel: 'grau', wert: `${formatZahl(g.schall, 0)} dB(A)`, text: 'Schallleistungspegel laut Katalog.', sort: g.schall, rangfolge: true });
   else kriterien.push(nichtPruefbar('schall', 'Schall (Außengerät)', ['Schallleistungspegel']));
 
   return {
@@ -260,19 +308,20 @@ export function pruefeGeraet(g, k) {
   };
 }
 
-// Schall und Effizienz lassen sich nur untereinander vergleichen: bester Wert grün, schlechtester rot, dazwischen gelb.
-// Mit nur einem Gerät oder gleichen Werten bleibt die Ampel neutral.
+// Schall und Effizienz lassen sich nur untereinander vergleichen: Die Ampel ist eine Rangfolge (bester Wert grün, schlechtester rot,
+// dazwischen gelb), daneben steht immer der echte Wert. Mit nur einem Gerät oder gleichen Werten bleibt die Ampel neutral.
 function vergleicheUntereinander(ergebnisse) {
   for (const id of ['effizienz', 'schall']) {
     const mit = ergebnisse.map((r) => r.kriterien.find((c) => c.id === id)).filter((c) => c && c.sort !== null);
     if (mit.length < 2) {
-      for (const c of mit) c.text += ' Nur Vergleich untereinander: mit nur einem Gerät keine Einordnung.';
+      for (const c of mit) c.text += ' Rangfolge: mit nur einem Gerät keine Einordnung.';
       continue;
     }
     const beste = Math.min(...mit.map((c) => c.sort));
     const schlechteste = Math.max(...mit.map((c) => c.sort));
     for (const c of mit) {
-      c.text += ' Nur Vergleich der Geräte untereinander.';
+      c.rang = `Rang ${1 + mit.filter((x) => x.sort < c.sort).length} von ${mit.length}`;
+      c.text += ' Die Ampel ist eine Rangfolge der Geräte untereinander, kein Maßstab.';
       if (beste === schlechteste) continue;
       c.ampel = c.sort === beste ? 'gruen' : c.sort === schlechteste ? 'rot' : 'gelb';
     }
@@ -310,3 +359,43 @@ export const SORTIERUNGEN = [
   { id: 'schall', text: 'Schall (leisester zuerst)' },
   { id: 'name', text: 'Name' },
 ];
+
+// --- Bericht -------------------------------------------------------------------------------------
+
+const AMPEL_WORT = { gruen: 'grün', gelb: 'gelb', rot: 'rot', grau: 'neutral' };
+export const STUFE_TEXT = { B: 'Prüfung (Stufe B)', A: 'Vorauswahl (Stufe A)', keine: 'keine Werte' };
+
+// Blöcke für eine eigene Berichtsseite: alle Katalog-Geräte, geprüfte vor vorausgewählten. erg: Ergebnis aus baueErgebnis (ergebnis.js).
+export function geraetepruefungBloecke(erg, katalog, sortierung = 'stufe') {
+  const text = (t) => ({ art: 'text', text: t });
+  const box = (t, stufe = 'hinweis') => ({ art: 'box', text: t, stufe });
+  const zwischentitel = (t) => ({ art: 'zwischentitel', text: t });
+  const k = kontextAusErgebnis(erg);
+  const bloecke = [text('Wärmepumpen aus dem Katalog gegen die Heizlast. Je Kriterium eine Ampel mit Begründung, keine Gesamtnote und kein Sieger. Geprüfte Geräte (mit Datenblattpunkten) stehen vor vorausgewählten (nur BAFA-Werte).')];
+  if (!k) return [...bloecke, box('Ohne berechenbare Heizlast lässt sich kein Gerät prüfen.', 'fehler')];
+  bloecke.push(text(`Geprüft gegen: obere Grenze ${kW(k.obereKW)} bei ${grad(k.thetaE)}, `
+    + (k.vorlauf === null ? `nötiger Vorlauf nicht bestimmbar (${k.vorlaufGrund}).` : `nötiger Vorlauf ${formatZahl(k.vorlauf, 1)} °C.`)));
+  for (const r of pruefeListe(katalog, k, sortierung)) {
+    bloecke.push(zwischentitel(`${r.name}: ${STUFE_TEXT[r.stufe]}`));
+    if (r.hinweis) bloecke.push(box(r.hinweis));
+    if (r.fehlend.length > 0) bloecke.push(box(`Nicht prüfbar: ${r.fehlend.join(', ')}`, 'fehler'));
+    bloecke.push({
+      art: 'tabelle', kopf: ['Kriterium', 'Ampel', 'Wert', 'Begründung'], ausrichtung: 'llll', summenzeile: false, hervor: [],
+      zeilen: r.kriterien.map((c) => [c.name, `${AMPEL_WORT[c.ampel]}${c.rangfolge && c.rang ? ' (Rangfolge)' : ''}`, `${c.wert}${c.rang ? ` · ${c.rang}` : ''}`, c.text]),
+    });
+  }
+  if (katalog.length === 0) bloecke.push(text('Der Katalog ist leer.'));
+  const sw = k.schwellen;
+  bloecke.push(zwischentitel('Grenzen der Ampeln'));
+  bloecke.push({
+    art: 'liste',
+    eintraege: [
+      `Deckung bei ${grad(k.thetaE)}: grün ab ${formatZahl(sw.deckungGruen, 0)} %, gelb ab ${formatZahl(sw.deckungGelb, 0)} %, sonst rot (einstellbar unter Grundlagen → Rechenannahmen).`,
+      `Bivalenzpunkt: grün bis ${grad(sw.bivalenzGruen)}, gelb bis ${grad(sw.bivalenzGelb)}, sonst rot (einstellbar). ${BIVALENZ_HINWEIS}`,
+      'Taktprüfung: Vorlauf je Außentemperatur aus der linearen Heizkurve. Grün, wenn die minimale Leistung bei +7 °C höchstens die Heizlast bei +7 °C beträgt, gelb bis +2 °C, sonst rot.',
+      'Effizienz und Schall: Rangfolge der Geräte untereinander, daneben der echte Wert.',
+      `Vorauswahl: ${VORAUSWAHL_HINWEIS} Grün bei 0,9 bis 1,3, gelb von 0,75 bis 0,9 und von 1,3 bis 1,6, sonst rot.`,
+    ],
+  });
+  return bloecke;
+}

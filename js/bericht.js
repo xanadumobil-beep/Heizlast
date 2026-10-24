@@ -14,6 +14,7 @@ import { datumText, inhaltsHinweise } from './io.js';
 import { baueplan, pruefZeilen } from './plan.js';
 import { baueVergleich, vergleichTabellen, bandText } from './vergleich.js';
 import { baueErgebnis, ergebnisBloecke } from './ergebnis.js';
+import { geraetepruefungBloecke } from './geraete.js';
 import { szenarioInfo, kostenNachFoerderung, kostenEingetragen } from './szenario.js';
 import {
   watt, wattBereich, wattBereichVon, mitVorzeichen, raumName, flaechenBezeichnung, angrenzendText, massText,
@@ -404,7 +405,7 @@ function fotoAnhangAbschnitt(eintraege) {
 
 // --- Gesamtbericht ---------------------------------------------------------------------------
 
-// optionen.fotoAnhang: Einträge aus fotoAnhang() (foto.js), erscheinen als Anhang. optionen.szenario: Angaben zu einem aktiven Szenario (siehe szenarioInfo). Dann gilt der Bericht für dieses Szenario:
+// optionen.waermepumpen: Geräte des Katalogs, daraus entsteht die Seite „Geräteprüfung“. optionen.fotoAnhang: Einträge aus fotoAnhang() (foto.js), erscheinen als Anhang. optionen.szenario: Angaben zu einem aktiven Szenario (siehe szenarioInfo). Dann gilt der Bericht für dieses Szenario:
 // projekt enthält die angewendeten Abweichungen, der Verbrauchsabgleich entfällt, ein Abschnitt listet die Abweichungen.
 export function baueBericht(projekt, jetzt = new Date(), optionen = {}) {
   const szenario = optionen.szenario ?? null;
@@ -415,17 +416,20 @@ export function baueBericht(projekt, jetzt = new Date(), optionen = {}) {
   const bewertung = ergebnis ? bewerteVorlauf(projekt, ergebnis, ziel) : null;
   const ctx = { projekt, ergebnis, hinweise, fehler, bewertung, berechnet, ziel };
   const hatErgebnis = Boolean(ergebnis) && ergebnis.raeume.length > 0;
+  const ergebnisDaten = baueErgebnis(szenario ? { ...projekt, szenario: { name: szenario.name } } : projekt, { mitVerbrauch: !szenario });
 
   const abschnitte = [
     {
       titel: 'Ergebnis auf einen Blick',
       bloecke: [
         ...(szenario ? [box(`Dieser Bericht gilt für das Szenario „${szenario.name}“, nicht für den Ist-Zustand. Alle Werte enthalten die Abweichungen des Szenarios.`)] : []),
-        ...ergebnisBloecke(baueErgebnis(szenario ? { ...projekt, szenario: { name: szenario.name } } : projekt, { mitVerbrauch: !szenario })),
+        ...ergebnisBloecke(ergebnisDaten),
         zwischentitel('Weitere Kennzahlen'),
         ...uebersicht(ctx).map((b) => (szenario && b.art === 'paare' ? { ...b, zeilen: b.zeilen.filter((r) => !r[0].startsWith('Verbrauchsabgleich')) } : b)),
       ],
     },
+    // Geräteprüfung: eigene Seite, wenn der Katalog Geräte enthält (optionen.waermepumpen aus dem Speicher).
+    ...(optionen.waermepumpen?.length > 0 ? [{ titel: 'Geräteprüfung: Wärmepumpen aus dem Katalog', neueSeite: true, bloecke: geraetepruefungBloecke(ergebnisDaten, optionen.waermepumpen) }] : []),
     ...(szenario ? [{ titel: `Szenario „${szenario.name}“: Abweichungen`, bloecke: abweichungsBloecke(szenario) }] : []),
     { titel: 'Projektdaten und Einstellungen', bloecke: projektdaten(projekt) },
     { titel: 'Verfahren und Annahmen', bloecke: verfahren(projekt) },

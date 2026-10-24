@@ -8,7 +8,7 @@ import { formatZahl, parseDezimal, zahlZuText } from '../engine/format.js';
 import { ladeIstProjekt, ladeSzenarien, ladeAktivesSzenario } from '../daten.js';
 import { wendeSzenarioAn } from '../szenario.js';
 import { normalisiereWaermepumpe } from '../schemas.js';
-import { pruefeListe, kontextAusErgebnis, SORTIERUNGEN, VORAUSWAHL_HINWEIS, SCHWELLEN } from '../geraete.js';
+import { pruefeListe, kontextAusErgebnis, SORTIERUNGEN, VORAUSWAHL_HINWEIS, BIVALENZ_HINWEIS, STUFE_TEXT, STANDARD_SCHWELLEN } from '../geraete.js';
 import { watt, wattBereichVon } from '../anzeige.js';
 import {
   baueErgebnis, benoetigtText, ampelText, zaehlerText, liniePunktText, waermepumpenannahmen, TYPEN_HINWEIS, MILD_HINWEIS,
@@ -122,13 +122,14 @@ function linieKarte(erg) {
     linienDiagramm(erg.linie),
     el(
       'table', { class: 'tabelle linientabelle' },
-      el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, 'Außentemperatur'), el('th', { scope: 'col', class: 'zahl' }, 'Untere Grenze'), el('th', { scope: 'col', class: 'zahl' }, 'Obere Grenze'))),
+      el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, 'Außentemperatur'), el('th', { scope: 'col', class: 'zahl' }, 'Untere Grenze'), el('th', { scope: 'col', class: 'zahl' }, 'Obere Grenze'), el('th', { scope: 'col', class: 'zahl' }, 'Vorlauf (Heizkurve)'))),
       el('tbody', {}, erg.linie.punkte.map((p) => {
         const t = liniePunktText(p);
-        return el('tr', { 'data-theta': p.theta }, el('th', { scope: 'row' }, t.theta), el('td', { class: 'zahl' }, t.min), el('td', { class: 'zahl' }, t.max));
+        return el('tr', { 'data-theta': p.theta }, el('th', { scope: 'row' }, t.theta), el('td', { class: 'zahl' }, t.min), el('td', { class: 'zahl' }, t.max), el('td', { class: 'zahl' }, t.vorlauf));
       })),
     ),
     el('p', { class: 'zeile' }, `H = Heizlast / (θ_soll,Mittel − θ_e) mit θ_soll,Mittel = ${formatZahl(erg.linie.thetaMittel, 1)} °C: ${formatZahl(erg.linie.hMin, 1)} bis ${formatZahl(erg.linie.hMax, 1)} W/K.`),
+    erg.linie.vorlaufY !== undefined ? el('p', { class: 'zeile' }, `Heizkurve linear von θ_soll,Mittel bis Y = ${formatZahl(erg.linie.vorlaufY, 1)} °C bei θ_e: t_V(θ) = θ_soll + (Y − θ_soll) · (θ_soll − θ) / (θ_soll − θ_e), mindestens 25 °C.`) : null,
   );
 }
 
@@ -150,14 +151,19 @@ function geraeteKarte(r, k) {
     'article', { class: `karte geraet-pruefung stufe-${r.stufe}`, 'data-geraet': r.name, 'data-stufe': r.stufe },
     el(
       'h4', {}, r.name,
-      el('span', { class: 'marke' }, r.stufe === 'B' ? 'Prüfung (Stufe B)' : r.stufe === 'A' ? 'Vorauswahl (Stufe A)' : 'keine Werte'),
+      el('span', { class: 'marke' }, STUFE_TEXT[r.stufe]),
     ),
     r.hinweis ? el('p', { class: 'meldung hinweis' }, r.hinweis) : null,
     r.fehlend.length > 0 ? el('p', { class: 'meldung warnung' }, `Nicht prüfbar: ${r.fehlend.join(', ')}`) : null,
     el('ul', { class: 'kriterien' }, r.kriterien.map((c) => el(
       'li', { class: `kriterium ampel-${c.ampel}`, 'data-kriterium': c.id },
-      el('span', { class: 'ampel-punkt', role: 'img', 'aria-label': `Ampel ${AMPEL_TEXT[c.ampel]}` }, '●'),
-      el('span', { class: 'k-inhalt' }, el('strong', {}, c.name), ': ', el('span', { class: 'k-wert' }, c.wert), el('span', { class: 'k-text' }, c.text)),
+      el('span', { class: 'ampel-punkt', role: 'img', 'aria-label': `${c.rangfolge && c.rang ? 'Rangfolge' : 'Ampel'} ${AMPEL_TEXT[c.ampel]}` }, '●'),
+      el(
+        'span', { class: 'k-inhalt' },
+        el('strong', {}, c.name), c.rangfolge && c.rang ? el('span', { class: 'marke' }, 'Rangfolge') : null, ': ',
+        el('span', { class: 'k-wert' }, c.wert), c.rang ? el('span', { class: 'k-rang' }, ` · ${c.rang}`) : null,
+        el('span', { class: 'k-text' }, c.text),
+      ),
     ))),
   );
 }
@@ -226,6 +232,7 @@ export async function renderErgebnis(container, neuLaden) {
     const sz = szenarien.find((x) => x.id === pruefWahl) ?? null;
     const erg = !sz ? ergIst : sz.id === szenario?.id ? ergSz : baueErgebnis({ ...wendeSzenarioAn(ist, sz).projekt, szenario: { id: sz.id, name: sz.name } }, { mitVerbrauch: false });
     const k = kontextAusErgebnis(erg);
+    const sw = erg.schwellen ?? STANDARD_SCHWELLEN;
     const ansichtWahl = el('select', { 'aria-label': 'Ansicht der Geräteprüfung', 'data-pruefansicht': true }, el('option', { value: '' }, 'Ist-Zustand'), szenarien.map((x) => el('option', { value: x.id }, `Szenario: ${x.name}`)));
     ansichtWahl.value = pruefWahl;
     ansichtWahl.addEventListener('change', () => { pruefWahl = ansichtWahl.value; zeichneGeraete(); });
@@ -251,12 +258,12 @@ export async function renderErgebnis(container, neuLaden) {
         el('summary', {}, 'Wie die Ampeln gebildet werden'),
         el(
           'ul', {},
-          el('li', {}, 'Deckung: maximale Heizleistung bei −8 °C und nötigem Vorlauf (linear zwischen den Datenblattpunkten, höchstens 3 K darüber hinaus) im Verhältnis zur oberen Grenze der Gebäudeheizlast. Grün ab 100 %, gelb ab 85 %, sonst rot.'),
-          el('li', {}, `Bivalenzpunkt: Außentemperatur, bei der die maximale Leistung der Heizlastlinie (obere Grenze) entspricht. Darunter deckt ein Heizstab den Rest. Grün ohne Heizstab bis −8 °C, gelb bis ${SCHWELLEN.bivalenzGelbBis} °C, sonst rot.`),
-          el('li', {}, 'Takt: minimale Leistung gegen die untere Grenze der Heizlast bei +7 °C und +2 °C. Grün bis +7 °C, gelb bis +2 °C, sonst rot.'),
-          el('li', {}, 'Effizienz und Schall: nur Vergleich der Geräte untereinander (bester Wert grün, schlechtester rot).'),
+          el('li', {}, `Deckung: maximale Heizleistung bei θ_e und nötigem Vorlauf (linear zwischen den Datenblattpunkten, höchstens 3 K darüber hinaus) im Verhältnis zur oberen Grenze der Gebäudeheizlast. Grün ab ${formatZahl(sw.deckungGruen, 0)} %, gelb ab ${formatZahl(sw.deckungGelb, 0)} %, sonst rot.`),
+          el('li', {}, `Bivalenzpunkt: Außentemperatur, bei der die maximale Leistung der Heizlastlinie (obere Grenze) entspricht. Darunter deckt ein Heizstab den Rest. Grün bis ${formatZahl(sw.bivalenzGruen, 0)} °C, gelb bis ${formatZahl(sw.bivalenzGelb, 0)} °C, sonst rot. ${BIVALENZ_HINWEIS}`),
+          el('li', {}, 'Takt: Vorlauf je Außentemperatur aus der Heizkurve, minimale Leistung dort aus den Datenblättern interpoliert (sonst der nächstliegende Punkt), gegen die untere Grenze der Heizlast. Grün bei +7 °C, gelb bei +2 °C, sonst rot.'),
+          el('li', {}, 'Effizienz und Schall: Rangfolge der Geräte untereinander (bester Wert grün, schlechtester rot), daneben immer der echte Wert.'),
           el('li', {}, `Vorauswahl: ${VORAUSWAHL_HINWEIS} Grün bei einem Verhältnis von 0,9 bis 1,3, gelb von 0,75 bis 0,9 und von 1,3 bis 1,6, sonst rot.`),
-          el('li', {}, 'Die Schwellen für Deckung und Bivalenzpunkt sind Annahmen der App.'),
+          el('li', {}, ['Die Grenzen für Deckung und Bivalenzpunkt stellst du unter ', el('a', { href: '#rechenannahmen' }, 'Grundlagen → Rechenannahmen'), ' ein.']),
         ),
       ),
     );

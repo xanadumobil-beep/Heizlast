@@ -86,6 +86,7 @@ const pruefe = (bedingung, text) => { if (!bedingung) { fehler += 1; console.log
   await seite.waitForTimeout(300);
   pruefe((await titel()) === 'Rechenannahmen', 'alter Link #einstellungen öffnet Rechenannahmen');
   const felder = await seite.locator('main .formular .beschriftung').allInnerTexts();
+  pruefe(felder.includes('Bivalenzpunkt: grün bis') && felder.includes('Deckung bei θ_e: grün ab'), 'Rechenannahmen: Ampelgrenzen der Geräteprüfung');
   pruefe(felder[0] === 'Projektname' && felder.includes('Sperrzeit des Netzbetreibers') && felder.includes('Ziel-Vorlauftemperatur'), `Rechenannahmen: Projektname zuerst, Ziel-Vorlauf und Sperrzeit enthalten (${felder.length} Felder)`);
   await seite.goto(`${ADRESSE}#app`);
   await seite.waitForTimeout(400);
@@ -112,11 +113,20 @@ const pruefe = (bedingung, text) => { if (!bedingung) { fehler += 1; console.log
   const stufen = await seite.locator('[data-geraetepruefung] .geraet-pruefung').evaluateAll((l) => l.map((x) => `${x.dataset.geraet}:${x.dataset.stufe}`));
   pruefe(stufen.join() === 'Beispiel-Hersteller Alpha 9:B,Beispiel-Hersteller Beta 6:A', `Geräteprüfung: geprüft vor vorausgewählt (${stufen})`);
   const alpha = await seite.locator('[data-geraet="Beispiel-Hersteller Alpha 9"].geraet-pruefung').innerText();
-  pruefe(alpha.includes('Deckung bei Auslegung') && alpha.includes('Bivalenzpunkt') && alpha.includes('Taktprüfung'), 'Karte Stufe B zeigt Deckung, Bivalenzpunkt und Takt');
+  pruefe(alpha.includes('Deckung bei −8 °C') && alpha.includes('Bivalenzpunkt') && alpha.includes('Taktprüfung'), 'Karte Stufe B zeigt Deckung, Bivalenzpunkt und Takt');
   const beta = await seite.locator('[data-geraet="Beispiel-Hersteller Beta 6"].geraet-pruefung').innerText();
   pruefe(beta.includes('Vorauswahl') && beta.includes('−10 °C'), 'Karte Stufe A: Vorauswahl mit Hinweis');
   await seite.selectOption('[data-sortierung]', 'name');
   pruefe(await seite.locator('[data-geraetepruefung] .geraet-pruefung').count() === 2, 'Sortierung ändern');
+
+  // Heizkurve im Ergebnis, Geräteprüfung als eigene Berichtsseite
+  await seite.goto(`${ADRESSE}#ergebnis`);
+  await seite.waitForSelector('tr[data-theta="7"]');
+  pruefe((await seite.locator('tr[data-theta="7"]').innerText()).match(/\d+,\d °C\s*$/) !== null, 'Linientabelle zeigt den Vorlauf der Heizkurve');
+  await seite.goto(`${ADRESSE}#bericht`);
+  await seite.waitForSelector('article.bericht');
+  const seiteBericht = await seite.locator('article.bericht section.neue-seite h2').allInnerTexts();
+  pruefe(seiteBericht.some((t) => t.includes('Geräteprüfung')), `Bericht: Geräteprüfung auf eigener Seite (${seiteBericht.join(' | ')})`);
 
   // Karten: Löschen rechts abgesetzt, in derselben Zeile wie Bearbeiten und Kopieren
   await seite.goto(`${ADRESSE}#zonen`);

@@ -3,7 +3,10 @@
 import { test, wahr, gleich } from './runner.js';
 import {
   interpoliere, maxLeistung, bivalenz, takt, effizienz, vorauswahl, fehlendeWerte, pruefeGeraet, pruefeListe, kontextAusErgebnis,
+  heizkurve, schwellen, STANDARD_SCHWELLEN, BIVALENZ_HINWEIS,
 } from '../js/geraete.js';
+import { baueBericht } from '../js/bericht.js';
+import { validiereEinstellungen, hatFehler } from '../js/validate.js';
 import { heizlastLinie, baueErgebnis } from '../js/ergebnis.js';
 import { validiereWaermepumpe } from '../js/validate.js';
 import { neueWaermepumpe, normalisiereWaermepumpe } from '../js/schemas.js';
@@ -70,6 +73,19 @@ test('Bivalenzpunkt: Schnittpunkt von 7,5 kW bei −7 °C und 9,5 kW bei +2 °C 
   wahr(!bivalenz(geraet([P(-7, 35, 9)]), 50, linie, -8).ok, 'ohne ausreichende Punkte');
 });
 
+// Heizkurve: t_V(θ) = θ_soll + (Y − θ_soll) · (θ_soll − θ) / (θ_soll − θ_e), θ_soll = 20 °C, Y = 56 °C, θ_e = −8 °C (Spanne 28 K, Y − θ_soll = 36 K)
+//   +7 °C:  20 + 36 · 13 / 28 = 36,714 °C     +2 °C: 20 + 36 · 18 / 28 = 43,143 °C     +12 °C: 20 + 36 · 8 / 28 = 30,286 °C
+//   −8 °C:  20 + 36 · 28 / 28 = 56 °C (= Y)    +20 °C: 20 °C, nach unten auf 25 °C begrenzt
+test('Heizkurve: θ_soll 20 °C, Y 56 °C, θ_e −8 °C ergibt bei +7 °C 36,71 °C', () => {
+  gleich(heizkurve(20, -8, 56, 7), 20 + (36 * 13) / 28, 1e-9, '+7 °C');
+  gleich(heizkurve(20, -8, 56, 7), 36.7143, 1e-4, '+7 °C Zahl');
+  gleich(heizkurve(20, -8, 56, 2), 43.1429, 1e-4, '+2 °C');
+  gleich(heizkurve(20, -8, 56, 12), 30.2857, 1e-4, '+12 °C');
+  gleich(heizkurve(20, -8, 56, -8), 56, 1e-9, 'bei θ_e gleich Y');
+  gleich(heizkurve(20, -8, 56, 20), 25, 1e-9, 'Untergrenze 25 °C');
+  gleich(heizkurve(20, -8, 56, 15), 26.4286, 1e-4, '+15 °C: 20 + 36 · 5 / 28');
+});
+
 // Taktprüfung (H = 300 W/K, θ_soll 20 °C, untere Grenze): Heizlast bei +7 °C = 300 · 13 = 3,9 kW, bei +2 °C = 300 · 18 = 5,4 kW, bei +12 °C = 300 · 8 = 2,4 kW
 //   minimale Leistung 3,0 kW ≤ 3,9 kW → grün; 4,5 kW > 3,9 kW, aber ≤ 5,4 kW → gelb; 5,6 kW > 5,4 kW → rot
 test('Taktprüfung: 3,0 kW gegen 3,9 kW bei +7 °C ist grün, 4,5 kW gelb, 5,6 kW rot', () => {
@@ -82,9 +98,28 @@ test('Taktprüfung: 3,0 kW gegen 3,9 kW bei +7 °C ist grün, 4,5 kW gelb, 5,6 k
   wahr(takt(geraet([P(7, 35, 11, 3.9)]), linie, 35).ampel === 'gruen', '3,9 kW genau auf der Grenze: grün');
   wahr(takt(geraet([P(7, 35, 11, 4.5)]), linie, 35).ampel === 'gelb', '4,5 kW: gelb');
   wahr(takt(geraet([P(7, 35, 11, 5.6)]), linie, 35).ampel === 'rot', '5,6 kW: rot');
-  wahr(!takt(geraet([P(2, 35, 9, 3.0)]), linie, 35).ok, 'ein Minimalpunkt bei A2 zählt nicht (A7 oder höher gefordert)');
-  // Bei A12 liegt ein kleinerer Wert: der Punkt mit passender Vorlauftemperatur gilt
-  gleich(takt(geraet([P(7, 35, 11, 3.0), P(7, 55, 9, 3.4)]), linie, 55).min, 3.4, 1e-9, 'Punkt mit dem nächsten Vorlauf');
+  wahr(!takt(geraet([P(2, 35, 9, 3.0)]), linie, 35).ok, 'ohne Minimalpunkt bei A7 oder höher nicht prüfbar');
+  wahr(takt(geraet([P(7, 35, 11, 3.0)]), linie, null).m7.quelle === 'kleinster', 'ohne Vorlauf Y: kleinster Wert bei A7 oder höher');
+});
+
+// Taktprüfung mit Heizkurve (θ_soll 20 °C, θ_e −8 °C): Y = 56 °C, Datenblatt A7/W35 min 3,0 kW und A7/W55 min 3,4 kW.
+//   Vorlauf bei +7 °C: 36,714 °C, innerhalb von 35 bis 55 °C: min = 3,0 + (3,4 − 3,0) / (55 − 35) · (36,714 − 35) = 3,0 + 0,02 · 1,714 = 3,0343 kW
+//   Bei +2 °C (43,143 °C) gibt es nur Punkte bei A7, 5 K entfernt, eine einzelne Außentemperatur lässt sich nicht fortsetzen:
+//   nächstliegender Punkt nach |ΔA| + |ΔV|: A7/W35 → 5 + 8,143 = 13,143, A7/W55 → 5 + 11,857 = 16,857, also A7/W35 mit 3,0 kW
+test('Taktprüfung mit Heizkurve: minimale Leistung bei 36,71 °C interpoliert, sonst nächstliegender Punkt', () => {
+  const linie = heizlastLinie({ min: 8400, max: 8400 }, 20, -8);
+  const t = takt(geraet([P(7, 35, 11, 3.0), P(7, 55, 9.5, 3.4)]), linie, 56, -8);
+  wahr(t.m7.quelle === 'interpoliert', t.m7.quelle);
+  gleich(t.m7.vorlauf, 36.7143, 1e-4, 'Vorlauf +7 °C');
+  gleich(t.m7.kW, 3 + 0.02 * (20 + (36 * 13) / 28 - 35), 1e-9, 'interpoliert');
+  gleich(t.m7.kW, 3.0343, 1e-4, 'Zahl');
+  wahr(t.m2.quelle === 'naechster' && t.m2.punkt.vorlauf === 35 && t.m2.kW === 3.0, `+2 °C: ${t.m2.quelle}`);
+  gleich(t.m2.vorlauf, 43.1429, 1e-4, 'Vorlauf +2 °C');
+  wahr(t.ampel === 'gruen', 'Takt grün');
+  // Der Text der Karte nennt Heizkurve und nächstliegenden Punkt
+  const k = { obereKW: 8.4, thetaE: -8, vorlauf: 56, vorlaufGrund: null, linie, linieGrund: null, schwellen: STANDARD_SCHWELLEN };
+  const text = pruefeGeraet(geraet([P(-7, 35, 9), P(-7, 55, 7), P(7, 35, 11, 3.0), P(7, 55, 9.5, 3.4)]), k).kriterien.find((c) => c.id === 'takt').text;
+  wahr(text.includes('interpoliert') && text.includes('nächstliegender Datenblattpunkt A7/W35'), text);
 });
 
 // Vorauswahl: Verhältnis = BAFA-Nennleistung 55 °C / obere Grenze. 9,0 / 8,4 = 1,0714 → grün.
@@ -110,20 +145,31 @@ test('Effizienz: ETAs linear zwischen 35 °C und 55 °C', () => {
 });
 
 // Vollständige Prüfung: Gerät mit A−7/W35 9,0, A−7/W55 7,0, A2/W50 9,5, A7/W35 max 11,0 min 3,0; Auslegung 8,4 kW bei −8 °C, Y = 50 °C.
-//   P(−8) = 7,2778 kW → Deckung 7,2778 / 8,4 = 86,6 % (gelb: ≥ 85 %, < 100 %); Bivalenz −5,85 °C (gelb: ≤ −5 °C); Takt 3,0 ≤ 3,9 kW (grün)
-test('Geräteprüfung (Stufe B): Deckung 86,6 % gelb, Bivalenz −5,85 °C gelb, Takt grün', () => {
-  const k = { obereKW: 8.4, thetaE: -8, vorlauf: 50, vorlaufGrund: null, linie: heizlastLinie({ min: 8400, max: 8400 }, 20, -8), linieGrund: null };
+//   P(−8) = 7,2778 kW → Deckung 7,2778 / 8,4 = 86,6 %; Standardgrenzen: grün ab 80 %, gelb ab 65 %.
+//   Bivalenz −5,85 °C; Standardgrenzen: grün bis −4 °C, gelb bis −1 °C, darüber rot. Takt 3,0 ≤ 3,9 kW (grün).
+//   Mit eigenen Grenzen (Deckung grün ab 90 %, gelb ab 80 %; Bivalenz grün bis −6 °C, gelb bis −5 °C) werden beide gelb.
+test('Geräteprüfung (Stufe B): Deckung 86,6 % und Bivalenz −5,85 °C grün mit Standardgrenzen, gelb mit eigenen', () => {
+  const k = { obereKW: 8.4, thetaE: -8, vorlauf: 50, vorlaufGrund: null, linie: heizlastLinie({ min: 8400, max: 8400 }, 20, -8), linieGrund: null, schwellen: STANDARD_SCHWELLEN };
   const g = geraet([P(-7, 35, 9), P(-7, 55, 7), P(2, 50, 9.5), P(7, 35, 11, 3.0)]);
   wahr(fehlendeWerte(g).length === 0, `Pflichtwerte vorhanden: ${fehlendeWerte(g)}`);
   const r = pruefeGeraet(g, k);
   const c = (id) => r.kriterien.find((x) => x.id === id);
   wahr(r.stufe === 'B', 'Stufe B');
-  wahr(c('deckung').ampel === 'gelb' && c('deckung').wert === '86,6 %', `${c('deckung').ampel} ${c('deckung').wert}`);
-  wahr(c('bivalenz').ampel === 'gelb' && c('bivalenz').wert === '−5,9 °C', `${c('bivalenz').ampel} ${c('bivalenz').wert}`);
+  wahr(c('deckung').ampel === 'gruen' && c('deckung').wert === '86,6 %', `${c('deckung').ampel} ${c('deckung').wert}`);
+  wahr(c('bivalenz').ampel === 'gruen' && c('bivalenz').wert === '−5,9 °C', `${c('bivalenz').ampel} ${c('bivalenz').wert}`);
   wahr(c('bivalenz').text.includes('1,12 kW'), c('bivalenz').text);
   wahr(c('takt').ampel === 'gruen', 'Takt grün');
   wahr(c('schall').ampel === 'grau' && c('schall').text.startsWith('nicht prüfbar'), 'ohne Schall: nicht prüfbar');
   wahr(!r.kriterien.some((x) => x.id === 'gesamt'), 'keine Gesamtnote');
+  const eigen = pruefeGeraet(g, { ...k, schwellen: { bivalenzGruen: -6, bivalenzGelb: -5, deckungGruen: 90, deckungGelb: 80 } });
+  wahr(eigen.kriterien.find((x) => x.id === 'deckung').ampel === 'gelb', 'Deckung 86,6 % mit eigenen Grenzen gelb');
+  wahr(eigen.kriterien.find((x) => x.id === 'bivalenz').ampel === 'gelb', 'Bivalenz −5,85 °C mit eigenen Grenzen gelb');
+  const streng = pruefeGeraet(g, { ...k, schwellen: { bivalenzGruen: -8, bivalenzGelb: -7, deckungGruen: 95, deckungGelb: 90 } });
+  wahr(streng.kriterien.find((x) => x.id === 'deckung').ampel === 'rot' && streng.kriterien.find((x) => x.id === 'bivalenz').ampel === 'rot', 'strenge Grenzen: rot');
+  // Ohne Heizstabbedarf bis θ_e (stärkeres Gerät: 10,0 / 9,0 kW bei A−7, W35 / W55 → 9,25 kW bei W50, A2/W50 11,0 kW → P(−8) = 9,25 − 1,75/9 = 9,056 kW ≥ 8,4 kW):
+  // grün nach den Grenzen, der Text nennt die Überdimensionierung
+  const stark = pruefeGeraet(geraet([P(-7, 35, 10), P(-7, 55, 9), P(2, 50, 11), P(7, 35, 12, 3.0)]), k).kriterien.find((x) => x.id === 'bivalenz');
+  wahr(stark.wert === 'unter −8 °C' && stark.ampel === 'gruen' && stark.text.includes('überdimensioniert'), `${stark.wert} ${stark.text}`);
 });
 
 test('Geräteprüfung: fehlende Werte werden benannt, nichts wird geraten', () => {
@@ -165,6 +211,10 @@ test('Schall und Effizienz: nur Vergleich untereinander, mit einem Gerät neutra
   const alle = pruefeListe([mit('A', 50, 190, 150), mit('B', 58, 180, 140), mit('C', 54, 185, 145)], k, 'name');
   const s = (m) => alle.find((r) => r.geraet.modell === m).kriterien.find((c) => c.id === 'schall').ampel;
   wahr(s('A') === 'gruen' && s('B') === 'rot' && s('C') === 'gelb', `Schall ${s('A')} ${s('B')} ${s('C')}`);
+  const sk = (m) => alle.find((r) => r.geraet.modell === m).kriterien.find((c) => c.id === 'schall');
+  wahr(sk('A').rang === 'Rang 1 von 3' && sk('C').rang === 'Rang 2 von 3' && sk('B').rang === 'Rang 3 von 3', 'Rangfolge Schall');
+  wahr(sk('A').wert === '50 dB(A)' && sk('B').wert === '58 dB(A)' && sk('A').rangfolge === true, 'der echte Wert steht neben der Rangfolge');
+  wahr(alle.find((r) => r.geraet.modell === 'A').kriterien.find((c) => c.id === 'effizienz').wert === '170 %', 'echter ETAs-Wert (190 − 2 · 10 bei 45 °C)');
   const e = (m) => alle.find((r) => r.geraet.modell === m).kriterien.find((c) => c.id === 'effizienz').ampel;
   wahr(e('A') === 'gruen' && e('B') === 'rot' && e('C') === 'gelb', 'Effizienz');
   const einzel = pruefeListe([mit('A', 50, 190, 150)], k);
@@ -247,4 +297,44 @@ test('Sicherung enthält den Katalog (Version 4); Katalogdatei und Sicherung las
   const umgekehrt = pruefeKatalogImport(JSON.stringify(datei));
   wahr(!umgekehrt.ok && umgekehrt.fehler[0].includes('Sicherung'), 'Sicherung als Katalogdatei abgelehnt');
   wahr(normalisiereWaermepumpe({ modell: 'x' }).punkte.length === 0, 'Normalisierung ergänzt Felder');
+});
+
+test('Ampelgrenzen: Standardwerte, eigene Werte und Prüfung in den Rechenannahmen', () => {
+  wahr(JSON.stringify(schwellen({})) === JSON.stringify({ bivalenzGruen: -4, bivalenzGelb: -1, deckungGruen: 80, deckungGelb: 65 }), 'Standard: −4 / −1 °C, 80 / 65 %');
+  const eigen = schwellen({ geraetepruefung: { bivalenzGruen: -5, deckungGruen: 90 } });
+  wahr(eigen.bivalenzGruen === -5 && eigen.deckungGruen === 90 && eigen.bivalenzGelb === -1 && eigen.deckungGelb === 65, 'fehlende Werte nehmen den Standard');
+  wahr(BIVALENZ_HINWEIS.startsWith('Ein Bivalenzpunkt um −5 °C ist bei monoenergetischen Luft-Wasser-Wärmepumpen üblich.'), 'Hinweistext');
+  const basis = { thetaAussen: -8, luftwechselStandard: { min: 0.5, max: 1 }, dUWB: { min: 0.05, max: 0.15 }, fg: 1, aufheizzuschlag: { aktiv: false, wProM2: 0 }, spreizung: 5, heizkoerperExponent: 1.3 };
+  wahr(!hatFehler(validiereEinstellungen({ ...basis, geraetepruefung: STANDARD_SCHWELLEN })), 'Standardwerte sind gültig');
+  wahr(hatFehler(validiereEinstellungen({ ...basis, geraetepruefung: { ...STANDARD_SCHWELLEN, bivalenzGruen: 0 } })), 'grüne Bivalenzgrenze über der gelben');
+  wahr(hatFehler(validiereEinstellungen({ ...basis, geraetepruefung: { ...STANDARD_SCHWELLEN, deckungGruen: 50 } })), 'grüne Deckungsgrenze unter der gelben');
+  wahr(hatFehler(validiereEinstellungen({ ...basis, geraetepruefung: { ...STANDARD_SCHWELLEN, deckungGelb: NaN } })), 'unlesbare Eingabe');
+});
+
+test('Ergebnis: Heizkurve als Tabelle zur Heizlastlinie', () => {
+  const p = mini();
+  p.heizkoerper = [{ id: 'hk', raumId: 'r', bauart: 'platten', typ: '22', status: 'bleibt', material: 'stahl', ventil: 'neu', name: 'P', normleistung: 1000, normVorlauf: 75, normRuecklauf: 65, normRaum: 20, exponent: null, kennlinie: [], kennlinieRaumtemperatur: 20, notiz: '' }];
+  const e = baueErgebnis(p);
+  const y = e.waermepumpe.vorlauf.grad;
+  const bei = (t) => e.linie.punkte.find((x) => x.theta === t).vorlauf;
+  gleich(bei(-8), y, 1e-9, 'bei θ_e gleich Y');
+  gleich(bei(7), Math.max(25, 20 + ((y - 20) * 13) / 28), 1e-9, '+7 °C: 20 + (Y − 20) · 13 / 28');
+  wahr(e.linie.punkte.every((x) => x.vorlauf >= 25), 'nie unter 25 °C');
+  wahr(JSON.stringify(baueBericht(p, new Date(2026, 9, 24))).includes('Vorlauf (Heizkurve)'), 'Heizkurve im Bericht');
+  wahr(baueErgebnis(mini()).linie.punkte[0].vorlauf === undefined, 'ohne bestimmbaren Vorlauf keine Heizkurve');
+});
+
+test('Bericht: Geräteprüfung auf einer eigenen Seite, nur mit Geräten im Katalog', () => {
+  const g = geraet([P(-7, 35, 9), P(-7, 55, 7), P(2, 50, 9.5), P(7, 35, 11, 3.0)], { schall: 52 });
+  const p = mini();
+  p.heizkoerper = [{ id: 'hk', raumId: 'r', bauart: 'platten', typ: '22', status: 'bleibt', material: 'stahl', ventil: 'neu', name: 'P', normleistung: 1000, normVorlauf: 75, normRuecklauf: 65, normRaum: 20, exponent: null, kennlinie: [], kennlinieRaumtemperatur: 20, notiz: '' }];
+  const b = baueBericht(p, new Date(2026, 9, 24), { waermepumpen: [g, geraet([], { modell: 'NurBafa', bafa: { ...neueWaermepumpe().bafa, nennleistung55: 0.5 } })] });
+  const a = b.abschnitte.find((x) => x.titel.includes('Geräteprüfung'));
+  wahr(a && a.neueSeite === true && b.abschnitte.indexOf(a) === 1, 'eigene Seite direkt nach dem Ergebnis');
+  const json = JSON.stringify(a);
+  wahr(json.includes('Test M') && json.includes('Prüfung (Stufe B)') && json.includes('Vorauswahl (Stufe A)'), 'beide Stufen');
+  wahr(json.includes('Taktprüfung') && json.includes('Deckung bei −8 °C') && json.includes('Bivalenzpunkt'), 'Kriterien');
+  wahr(json.includes('Grenzen der Ampeln') && json.includes('Rangfolge'), 'Grenzen und Rangfolge');
+  wahr(!baueBericht(p, new Date(2026, 9, 24)).abschnitte.some((x) => x.titel.includes('Geräteprüfung')), 'ohne Katalog keine Seite');
+  wahr(!baueBericht(p, new Date(2026, 9, 24), { waermepumpen: [] }).abschnitte.some((x) => x.titel.includes('Geräteprüfung')), 'leerer Katalog: keine Seite');
 });

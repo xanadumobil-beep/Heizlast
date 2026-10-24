@@ -5,6 +5,7 @@ import { el, ersetzeKinder, baueFormular } from '../ui.js';
 import { fordereDauerhaftenSpeicherAn, speicherStatus } from '../persist.js';
 import { hatFehler, hatWarnungen, validiereEinstellungen } from '../validate.js';
 import { EINSTELLUNGEN_FELDER } from '../schemas.js';
+import { schwellen } from '../geraete.js';
 import { bytesText } from '../foto.js';
 import { installierteVersion, onlineVersion, sucheUpdate, leereAppSpeicher, datumUhrzeit } from '../appversion.js';
 
@@ -97,7 +98,7 @@ export async function renderRechenannahmen(container) {
   let bestaetigt = false;
 
   const speichernKnopf = el('button', { type: 'button', class: 'primaer' }, 'Speichern');
-  const formular = baueFormular(EINSTELLUNGEN_FELDER, einstellungen, () => {
+  const formular = baueFormular(EINSTELLUNGEN_FELDER, { ...einstellungen, geraetepruefung: schwellen(einstellungen) }, () => {
     bestaetigt = false;
     speichernKnopf.textContent = 'Speichern';
     rueckmeldung.textContent = '';

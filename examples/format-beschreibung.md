@@ -272,18 +272,23 @@ Dateien vor Version 4 haben diese Liste nicht: Beim Import bleibt der vorhandene
 
 ### Katalogdatei
 
-Der Katalog lässt sich ohne Hausdaten als eigene Datei tauschen: `{ "format": "heizlast-waermepumpenkatalog", "schemaVersion": 4, "exportiertAm", "app", "daten": { "waermepumpen": [ … ] } }`.
-Export und Import stehen unter Grundlagen → Wärmepumpen. Beim Import wählst du „Zum Katalog hinzufügen“ (gleiche Kennungen werden überschrieben) oder „Katalog ersetzen“.
-Die Dateien lassen sich nicht verwechseln: Eine Katalogdatei lehnt der Sicherungs-Import ab und umgekehrt. Ein erfundenes Beispiel steht in `examples/beispiel-waermepumpen.json`.
+Der Katalog lässt sich ohne Hausdaten als eigene Datei tauschen (`format` = `heizlast-waermepumpenkatalog`). Die vollständige Beschreibung aller Felder mit Einheiten, Pflicht und erlaubten Werten,
+samt Beispiel und Checkliste für extern erstellte Dateien, steht in **`examples/format-katalog.md`**. Ein erfundenes Beispiel liegt in `examples/beispiel-waermepumpen.json`.
 
 ### Geräteprüfung (Bereich Ergebnis)
 
 Stufe A „Vorauswahl“ (nur BAFA-Werte): Verhältnis aus BAFA-Nennleistung 55 °C und oberer Grenze der Gebäudeheizlast. Grün 0,9 bis 1,3, gelb 0,75 bis 0,9 und 1,3 bis 1,6, sonst rot.
 Die BAFA-Nennleistung bezieht sich auf eine Auslegung bei −10 °C (EU-Durchschnittsklima), die Vorauswahl ist keine Auslegung.
 Stufe B „Prüfung“ (mit Datenblattpunkten, ersetzt die Vorauswahl): maximale Leistung bei θ_e und nötigem Vorlauf Y linear zwischen den Punkten (höchstens 3 K Fortsetzung darüber hinaus),
-Deckung gegen die obere Grenze (grün ab 100 %, gelb ab 85 %), Bivalenzpunkt gegen die Heizlastlinie der oberen Grenze (grün ohne Heizstab bis θ_e, gelb bis −5 °C, sonst rot),
-Taktprüfung (minimale Leistung gegen die untere Grenze der Heizlast: grün bis +7 °C, gelb bis +2 °C, sonst rot), Effizienz (ETAs linear bei Y) und Schall (nur Vergleich untereinander).
-Die Schwellen für Deckung und Bivalenzpunkt sind Annahmen der App. Es gibt keine Gesamtnote.
+Deckung gegen die obere Grenze, Bivalenzpunkt gegen die Heizlastlinie der oberen Grenze, Taktprüfung, Effizienz (ETAs linear bei Y) und Schall.
+Taktprüfung: Der Vorlauf je Außentemperatur kommt aus der linearen Heizkurve t_V(θ) = θ_soll + (Y − θ_soll) · (θ_soll − θ) / (θ_soll − θ_e), mindestens 25 °C. Die minimale Leistung bei +7 °C und +2 °C wird bei diesem
+Vorlauf aus den Datenblattpunkten interpoliert (sonst gilt der nächstliegende Punkt). Grün: minimale Leistung bei +7 °C höchstens die Heizlast (untere Grenze) bei +7 °C, gelb: erst bei +2 °C, sonst rot.
+Effizienz und Schall sind eine Rangfolge der Geräte untereinander, der echte Wert steht daneben. Es gibt keine Gesamtnote.
+
+## `daten.einstellungen.geraetepruefung` (optional)
+
+Ampelgrenzen der Geräteprüfung, einstellbar unter Grundlagen → Rechenannahmen: `{ "bivalenzGruen": -4, "bivalenzGelb": -1, "deckungGruen": 80, "deckungGelb": 65 }`.
+Bivalenzpunkt in °C: grün bis `bivalenzGruen`, gelb bis `bivalenzGelb`, darüber rot. Deckung bei θ_e in %: grün ab `deckungGruen`, gelb ab `deckungGelb`, darunter rot. Fehlt der Block oder ein Wert, gilt der Standard (die hier genannten Werte).
 
 ## Vorbereitet für spätere Stufen
 

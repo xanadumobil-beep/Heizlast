@@ -107,6 +107,14 @@ export const EINSTELLUNGEN_FELDER = [
     key: 'waermepumpe.sperrstunden', label: 'Sperrzeit des Netzbetreibers', typ: 'zahl', einheit: 'h pro Tag',
     hinweis: 'Optional, nur für den Zuschlag bei der benötigten Wärmepumpenleistung im Ergebnis. Ohne Eingabe gibt es keinen Zuschlag.',
   },
+  {
+    key: 'geraetepruefung', label: 'Geräteprüfung', typ: 'abschnitt',
+    hinweis: 'Grenzen der Ampeln im Bereich Ergebnis. Ein Bivalenzpunkt um −5 °C ist bei monoenergetischen Luft-Wasser-Wärmepumpen üblich. Ein Gerät ohne Heizstabbedarf bis zur Normaußentemperatur ist meist überdimensioniert und taktet in der Übergangszeit.',
+  },
+  { key: 'geraetepruefung.bivalenzGruen', label: 'Bivalenzpunkt: grün bis', typ: 'zahl', einheit: '°C', hinweis: 'Standard −4 °C.' },
+  { key: 'geraetepruefung.bivalenzGelb', label: 'Bivalenzpunkt: gelb bis', typ: 'zahl', einheit: '°C', hinweis: 'Standard −1 °C, darüber rot.' },
+  { key: 'geraetepruefung.deckungGruen', label: 'Deckung bei θ_e: grün ab', typ: 'zahl', einheit: '%', hinweis: 'Maximale Heizleistung bei Normaußentemperatur im Verhältnis zur oberen Grenze der Heizlast. Standard 80 %.' },
+  { key: 'geraetepruefung.deckungGelb', label: 'Deckung bei θ_e: gelb ab', typ: 'zahl', einheit: '%', hinweis: 'Standard 65 %, darunter rot.' },
 ];
 
 export const ZONEN_FELDER = [

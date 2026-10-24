@@ -3,8 +3,8 @@
 // Eine neue Version (geänderte VERSION) ersetzt den alten Speicher vollständig.
 
 // --- erzeugt von tools/sw-aktualisieren.js, nicht von Hand ändern ---
-const VERSION = '3ed4f333f7';
-const ERSTELLT = '2026-10-24T11:29:15.633Z';
+const VERSION = 'facdbc8cb7';
+const ERSTELLT = '2026-10-24T11:37:33.544Z';
 const DATEIEN = [
   "./",
   "css/print.css",
@@ -12,6 +12,7 @@ const DATEIEN = [
   "examples/beispiel-mini-haus.json",
   "examples/beispiel-waermepumpen.json",
   "examples/format-beschreibung.md",
+  "examples/format-katalog.md",
   "icons/icon-180.png",
   "icons/icon-192.png",
   "icons/icon-512.png",

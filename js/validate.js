@@ -58,6 +58,25 @@ function ausListe(feld, wert, erlaubt, name) {
   return erlaubt.includes(wert) ? [] : [fehler(feld, `${name}: bitte eine Auswahl treffen.`)];
 }
 
+// Ampelgrenzen der Geräteprüfung (einstellungen.geraetepruefung, optional). Fehlt der Block, gelten die Standardwerte.
+function geraetepruefungGrenzen(g) {
+  if (!g) return [];
+  const f = (key, name, einheit, opt) => zahl(`geraetepruefung.${key}`, g[key], { name, einheit, ...opt });
+  const meldungen = [
+    ...f('bivalenzGruen', 'Bivalenzpunkt grün', '°C', { warnWennUeber: 10, warnWennUnter: -25 }),
+    ...f('bivalenzGelb', 'Bivalenzpunkt gelb', '°C', { warnWennUeber: 10, warnWennUnter: -25 }),
+    ...f('deckungGruen', 'Deckung grün', '%', { fehlerWennKleiner: 0, warnWennUeber: 150 }),
+    ...f('deckungGelb', 'Deckung gelb', '%', { fehlerWennKleiner: 0, warnWennUeber: 150 }),
+  ];
+  if (istZahl(g.bivalenzGruen) && istZahl(g.bivalenzGelb) && g.bivalenzGruen > g.bivalenzGelb) {
+    meldungen.push(fehler('geraetepruefung.bivalenzGelb', 'Bivalenzpunkt: Die grüne Grenze darf nicht über der gelben liegen.'));
+  }
+  if (istZahl(g.deckungGruen) && istZahl(g.deckungGelb) && g.deckungGruen < g.deckungGelb) {
+    meldungen.push(fehler('geraetepruefung.deckungGelb', 'Deckung: Die grüne Grenze darf nicht unter der gelben liegen.'));
+  }
+  return meldungen;
+}
+
 export function validiereEinstellungen(e) {
   return [
     ...zahl('thetaAussen', e.thetaAussen, {
@@ -79,6 +98,7 @@ export function validiereEinstellungen(e) {
     ...zahl('heizkoerperExponent', e.heizkoerperExponent, {
       name: 'Heizkörperexponent', fehlerWennKleinerGleich: 0, warnWennUeber: 1.6, warnWennUnter: 1,
     }),
+    ...geraetepruefungGrenzen(e.geraetepruefung),
     // Ziel-Vorlauf und Sperrzeit stehen erst seit dem Formular „Rechenannahmen“ in der Prüfung. Fehlt das Feld ganz, bleibt es unbeachtet.
     ...('zielVorlauf' in e ? zahl('zielVorlauf', e.zielVorlauf, { name: 'Ziel-Vorlauftemperatur', einheit: '°C', fehlerWennKleiner: 25, warnWennUeber: 60 }).concat(e.zielVorlauf > 75 ? [fehler('zielVorlauf', 'Ziel-Vorlauftemperatur: höchstens 75 °C.')] : []) : []),
     ...(e.waermepumpe?.sperrstunden === null || e.waermepumpe?.sperrstunden === undefined ? []
@@ -360,6 +380,12 @@ export function validiereWaermepumpe(g) {
     meldungen.push(warnung('datenblatt', 'Der Link beginnt nicht mit http:// oder https://, er wird deshalb nur als Text angezeigt.'));
   }
   const b = g.bafa ?? {};
+  if (b.foerderfaehig !== undefined && !['ja', 'nein', 'unbekannt'].includes(b.foerderfaehig)) {
+    meldungen.push(warnung('bafa.foerderfaehig', 'Förderfähig: erlaubt sind ja, nein und unbekannt. Der Wert wird als unbekannt behandelt.'));
+  }
+  if (typeof b.stand === 'string' && b.stand !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(b.stand)) {
+    meldungen.push(warnung('bafa.stand', 'Stand: erwartet wird ein Datum im Format JJJJ-MM-TT, zum Beispiel 2026-01-15.'));
+  }
   meldungen.push(
     ...optionalZahl('bafa.nennleistung55', b.nennleistung55, { name: 'BAFA-Nennleistung', einheit: 'kW', fehlerWennKleinerGleich: 0, warnWennUeber: 30 }),
     ...optionalZahl('bafa.eta35', b.eta35, { name: 'ETAs 35 °C', einheit: '%', fehlerWennKleinerGleich: 0, warnWennUeber: 300, warnWennUnter: 100 }),
