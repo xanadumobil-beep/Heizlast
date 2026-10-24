@@ -5,6 +5,7 @@ import { el, ersetzeKinder, baueFormular } from '../ui.js';
 import { fordereDauerhaftenSpeicherAn, speicherStatus } from '../persist.js';
 import { hatFehler, hatWarnungen, validiereEinstellungen } from '../validate.js';
 import { EINSTELLUNGEN_FELDER } from '../schemas.js';
+import { installierteVersion, onlineVersion, sucheUpdate, leereAppSpeicher, datumUhrzeit } from '../appversion.js';
 
 function groesse(bytes) {
   if (bytes === null) return '–';
@@ -30,6 +31,57 @@ async function baueSpeicherBlock() {
       status.unterstuetzt && !status.gewaehrt
         ? el('button', { type: 'button', onClick: async () => { await fordereDauerhaftenSpeicherAn(); await fuelle(); } }, 'Erneut anfordern')
         : null,
+    );
+  };
+  await fuelle();
+  return block;
+}
+
+// Zeigt, welche Version der App auf dem Gerät liegt und was online verfügbar ist.
+async function baueVersionBlock() {
+  const block = el('section', { class: 'karte' });
+  const meldung = el('p', { class: 'zeile', 'aria-live': 'polite' });
+  const fuelle = async () => {
+    const installiert = await installierteVersion().catch(() => null);
+    let online = null;
+    try { online = await onlineVersion(); } catch { /* offline */ }
+    const aktuell = installiert && online?.version ? installiert === online.version : null;
+    ersetzeKinder(
+      block,
+      el('h3', {}, 'App-Version'),
+      el('p', { class: 'zeile' }, `Auf diesem Gerät: ${installiert ?? 'nicht zwischengespeichert'}`),
+      el('p', { class: 'zeile' }, online
+        ? `Online verfügbar: ${online.version ?? '?'}${online.erstellt ? ` (Stand ${datumUhrzeit(online.erstellt)})` : ''}`
+        : 'Online verfügbar: nicht erreichbar (kein Internet?)'),
+      aktuell === null ? null : el('p', { class: aktuell ? 'ok' : 'zeile' }, aktuell ? '✓ Die App ist auf dem neuesten Stand.' : 'Es gibt eine neuere Version. „Nach Updates suchen“ lädt sie.'),
+      el(
+        'div', { class: 'knopfzeile' },
+        el('button', {
+          type: 'button',
+          onClick: async () => {
+            meldung.textContent = 'Suche läuft …';
+            try {
+              const ergebnis = await sucheUpdate();
+              meldung.textContent = ergebnis === 'neu'
+                ? 'Eine neue Version wird geladen. Gleich erscheint oben der Hinweis zum Neuladen.'
+                : ergebnis === 'aktuell' ? 'Keine neuere Version gefunden.' : 'Der Offline-Speicher ist in diesem Browser nicht aktiv.';
+            } catch {
+              meldung.textContent = 'Die Suche ist fehlgeschlagen. Bitte Internetverbindung prüfen.';
+            }
+            setTimeout(fuelle, 4000);
+          },
+        }, 'Nach Updates suchen'),
+        el('button', {
+          type: 'button',
+          class: 'gefahr',
+          onClick: async () => {
+            if (!confirm('Den App-Speicher leeren und die App neu laden? Deine Eingaben bleiben erhalten. Es ist Internet nötig.')) return;
+            await leereAppSpeicher();
+          },
+        }, 'App-Speicher leeren und neu laden'),
+      ),
+      meldung,
+      el('p', { class: 'hinweis' }, 'Hängt die App an einer alten Version, hilft „App-Speicher leeren und neu laden“. Es löscht nur die zwischengespeicherten Programmdateien, nicht deine Daten.'),
     );
   };
   await fuelle();
@@ -70,5 +122,6 @@ export async function renderEinstellungen(container) {
     formular.element,
     el('div', { class: 'knopfzeile' }, speichernKnopf, rueckmeldung),
     await baueSpeicherBlock(),
+    await baueVersionBlock(),
   );
 }

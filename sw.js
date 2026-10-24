@@ -3,7 +3,8 @@
 // Eine neue Version (geänderte VERSION) ersetzt den alten Speicher vollständig.
 
 // --- erzeugt von tools/sw-aktualisieren.js, nicht von Hand ändern ---
-const VERSION = 'bf75981d99';
+const VERSION = '1336546a84';
+const ERSTELLT = '2026-10-24T08:25:21.010Z';
 const DATEIEN = [
   "./",
   "css/print.css",
@@ -16,6 +17,7 @@ const DATEIEN = [
   "index.html",
   "js/anzeige.js",
   "js/app.js",
+  "js/appversion.js",
   "js/banner.js",
   "js/bericht.js",
   "js/daten.js",
@@ -50,9 +52,20 @@ const DATEIEN = [
 
 const SPEICHER = `heizlast-${VERSION}`;
 
+// Beim Installieren werden die Dateien am Zwischenspeicher des Browsers vorbei geholt ("reload"). Sonst könnte eine
+// neue Version versehentlich noch die alten Dateien übernehmen, die GitHub Pages bis zu 10 Minuten ausliefert.
+function ladeFrisch(speicher, datei) {
+  return fetch(new Request(datei, { cache: 'reload' })).then((antwort) => {
+    if (!antwort.ok) throw new Error(`${datei}: ${antwort.status}`);
+    return speicher.put(datei, antwort);
+  });
+}
+
 self.addEventListener('install', (ereignis) => {
   ereignis.waitUntil(
-    caches.open(SPEICHER).then((speicher) => speicher.addAll(DATEIEN)).then(() => self.skipWaiting()),
+    caches.open(SPEICHER)
+      .then((speicher) => Promise.all(DATEIEN.map((datei) => ladeFrisch(speicher, datei))))
+      .then(() => self.skipWaiting()),
   );
 });
 

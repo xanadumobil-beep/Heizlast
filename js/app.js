@@ -84,7 +84,13 @@ function registriereServiceWorker() {
     );
     hinweis.hidden = false;
   });
-  navigator.serviceWorker.register('sw.js').catch(() => { /* ohne Service Worker läuft die App online weiter */ });
+  navigator.serviceWorker.register('sw.js').then((registrierung) => {
+    // Eine Home-Bildschirm-App sucht von selbst nur beim Start nach Updates. Deshalb zusätzlich beim Zurückkehren
+    // in den Vordergrund und regelmäßig, solange sie offen ist.
+    const suche = () => registrierung.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') suche(); });
+    setInterval(suche, 30 * 60 * 1000);
+  }).catch(() => { /* ohne Service Worker läuft die App online weiter */ });
 }
 
 registriereServiceWorker();
