@@ -248,17 +248,18 @@ import { validiereVerbrauch } from '../js/validate.js';
 import { neuerVerbrauch } from '../js/schemas.js';
 
 const verbrauch = (extra = {}) => ({
-  name: 'Heizperiode', gasKwh: 20000, warmwasserKwh: 3000, kesselNutzungsgrad: { min: 90, max: 95 },
-  holzRm: null, heizwertRm: null, ofenWirkungsgrad: null, innentemperatur: 21,
+  name: 'Heizperiode', gasKwh: 20000, nichtFuerHeizungKwh: 3000, kesselNutzungsgrad: { min: 90, max: 95 },
+  holzRm: null, heizwertRm: null, ofenWirkungsgrad: null, innentemperaturIst: { min: 20, max: 21 }, innentemperaturSoll: 21,
   monate: [{ id: 'm1', name: 'Januar', gradtage: 650, heiztage: 31, heizmonat: true }], ...extra,
 });
 
-test('Neuer Verbrauchsabgleich: keine erfundenen Werte außer Warmwasser 0 und dem Innentemperatur-Vorschlag', () => {
+test('Neuer Verbrauchsabgleich: keine erfundenen Werte außer Nicht-Heizungs-Anteil 0 und dem Vorschlag für die Soll-Temperatur', () => {
   const neu = neuerVerbrauch(18.6);
   wahr(neu.gasKwh === null && neu.holzRm === null, 'Gas und Holz leer');
   wahr(neu.kesselNutzungsgrad.min === null && neu.kesselNutzungsgrad.max === null, 'Nutzungsgrad leer');
   wahr(neu.heizwertRm === null && neu.ofenWirkungsgrad === null, 'Heizwert und Wirkungsgrad leer');
-  wahr(neu.warmwasserKwh === 0 && neu.innentemperatur === 18.6, 'Warmwasser 0, Innentemperatur Vorschlag');
+  wahr(neu.nichtFuerHeizungKwh === 0 && neu.innentemperaturSoll === 18.6, 'Anteil 0, Soll-Temperatur ist der Vorschlag');
+  wahr(neu.innentemperaturIst.min === null && neu.innentemperaturIst.max === null, 'tatsächliche Innentemperatur nicht vorbelegt');
   wahr(neu.monate.length === 0, 'keine Monate vorbelegt');
 });
 
@@ -270,9 +271,11 @@ test('Verbrauchsabgleich: Pflichtangaben fehlen', () => {
   wahr(hatFehler(validiereVerbrauch(verbrauch({ name: '' }))), 'Name');
   wahr(hatFehler(validiereVerbrauch(verbrauch({ gasKwh: null }))), 'Gas');
   wahr(hatFehler(validiereVerbrauch(verbrauch({ kesselNutzungsgrad: { min: null, max: null } }))), 'Nutzungsgrad');
-  wahr(hatFehler(validiereVerbrauch(verbrauch({ innentemperatur: null }))), 'Innentemperatur');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ innentemperaturIst: { min: null, max: null } }))), 'tatsächliche Innentemperatur ist Pflicht');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ innentemperaturIst: { min: 21, max: 19 } }))), 'θ_ist: Minimum über Maximum');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ innentemperaturSoll: null }))), 'Soll-Innentemperatur ist Pflicht');
   wahr(hatFehler(validiereVerbrauch(verbrauch({ kesselNutzungsgrad: { min: 95, max: 90 } }))), 'Minimum über Maximum');
-  wahr(hatFehler(validiereVerbrauch(verbrauch({ warmwasserKwh: 25000 }))), 'Warmwasser über Gas');
+  wahr(hatFehler(validiereVerbrauch(verbrauch({ nichtFuerHeizungKwh: 25000 }))), 'Anteil nicht für Heizung über Gas');
 });
 
 test('Verbrauchsabgleich: Holz verlangt Heizwert und Wirkungsgrad', () => {
@@ -307,5 +310,5 @@ test('Verbrauchsabgleich: ungewöhnliche Gradtage je Heiztag und nicht positive 
   const viel = [{ id: 'm1', name: 'Januar', gradtage: 1500, heiztage: 31, heizmonat: true }];
   wahr(hatWarnungen(validiereVerbrauch(verbrauch({ monate: viel }))), '48 Kd je Tag ist ungewöhnlich');
   const wenig = [{ id: 'm1', name: 'Januar', gradtage: 100, heiztage: 10, heizmonat: true }];
-  wahr(feldMeldung(validiereVerbrauch(verbrauch({ monate: wenig, innentemperatur: 5 })), 'innentemperatur', 'fehler'), 'G nach Umrechnung nicht positiv');
+  wahr(feldMeldung(validiereVerbrauch(verbrauch({ monate: wenig, innentemperaturIst: { min: 5, max: 6 } })), 'innentemperaturIst', 'fehler'), 'G nach Umrechnung nicht positiv (niedrigste tatsächliche Temperatur)');
 });

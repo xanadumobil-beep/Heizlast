@@ -4,7 +4,7 @@ import { test, gleich, wahr } from './runner.js';
 import {
   berechneVerbrauch, gradtage, vergleiche, annahmen, FREMDWAERME_HINWEIS, HS_HINWEIS,
 } from '../js/engine/verbrauch.js';
-import { mittlereInnentemperatur } from '../js/modell.js';
+import { mittlereInnentemperatur, migriereVerbrauch } from '../js/modell.js';
 
 // Heizmonate (G20/15 in Kd | Heiztage): Oktober 250 | 20, November 450 | 30, Dezember 600 | 31,
 // Januar 650 | 31, Februar 500 | 28. März (400 | 31) ist nicht als Heizmonat gewählt und zählt nicht.
@@ -21,13 +21,14 @@ const monate = () => [
 
 const eingabe = (extra = {}) => ({
   gasKwh: 20000,
-  warmwasserKwh: 3000,
+  nichtFuerHeizungKwh: 3000,
   kesselNutzungsgrad: { min: 90, max: 95 },
   holzRm: 4,
   heizwertRm: { min: 1800, max: 2000 },
   ofenWirkungsgrad: { min: 70, max: 80 },
   monate: monate(),
-  innentemperatur: 21,
+  innentemperaturIst: { min: 21, max: 21 },
+  innentemperaturSoll: 21,
   normAussentemperatur: -8,
   ...extra,
 });
@@ -53,7 +54,7 @@ test('Gradtage: ein zusätzlich gewählter Monat zählt, ein abgewählter nicht'
   gleich(gradtage(ohneJanuar, 20).g20_15, 1800, 1e-9, 'ohne Januar: 2450 − 650');
 });
 
-// Gas: 20000 kWh − 3000 kWh Warmwasser = 17000 kWh Heizung
+// Gas: 20000 kWh − 3000 kWh nicht für Heizung (Warmwasser, Gasherd, Sonstiges) = 17000 kWh Heizung
 //   Nutzwärme Gas: 17000 · 0,90 = 15300 kWh bis 17000 · 0,95 = 16150 kWh
 // Holz: 4 Rm
 //   unten 4 · 1800 · 0,70 = 5040 kWh, oben 4 · 2000 · 0,80 = 6400 kWh
@@ -79,12 +80,12 @@ test('Verbrauchsabgleich mit Gas und Holz: H und Heizlast als Bandbreite', () =>
   gleich(r.heizlast.mittel, 10004.9, 0.1, 'Heizlast Mittel');
 });
 
-// Nur Gas, kein Warmwasserabzug: Q = 1000 · 0,90 = 900 kWh bis 1000 · 0,92 = 920 kWh
+// Nur Gas, nichts abgezogen: Q = 1000 · 0,90 = 900 kWh bis 1000 · 0,92 = 920 kWh
 //   H = 900 000 / 62 160 = 14,479 W/K bis 920 000 / 62 160 = 14,801 W/K
 //   Φ_N = H · 29 = 419,9 W bis 429,2 W
 test('Verbrauchsabgleich nur mit Gas: Holzangaben sind nicht nötig', () => {
   const r = berechneVerbrauch(eingabe({
-    gasKwh: 1000, warmwasserKwh: 0, kesselNutzungsgrad: { min: 90, max: 92 },
+    gasKwh: 1000, nichtFuerHeizungKwh: 0, kesselNutzungsgrad: { min: 90, max: 92 },
     holzRm: null, heizwertRm: null, ofenWirkungsgrad: null,
   }));
   wahr(r.status === 'ok', 'Status ok');
@@ -96,13 +97,13 @@ test('Verbrauchsabgleich nur mit Gas: Holzangaben sind nicht nötig', () => {
 
 // Ohne Umrechnung (θ_i = 20 °C): G = 2450 Kd, H = 20 340 000 / (24 · 2450) = 20 340 000 / 58 800 = 345,92 W/K
 test('Innentemperatur 20 °C: keine Gradtagkorrektur', () => {
-  const r = berechneVerbrauch(eingabe({ innentemperatur: 20 }));
+  const r = berechneVerbrauch(eingabe({ innentemperaturIst: { min: 20, max: 20 }, innentemperaturSoll: 20 }));
   gleich(r.h.min, 345.92, 0.01, 'H unten bei 20 °C');
   gleich(r.deltaT, 28, 1e-9, 'ΔT = 20 − (−8)');
 });
 
-test('Warmwasser größer als der Gasverbrauch ist ein Fehler', () => {
-  wahr(berechneVerbrauch(eingabe({ warmwasserKwh: 25000 })).grund === 'warmwasser_zu_gross', 'Warmwasser zu groß');
+test('Nicht-Heizungs-Anteil größer als der Gasverbrauch ist ein Fehler', () => {
+  wahr(berechneVerbrauch(eingabe({ nichtFuerHeizungKwh: 25000 })).grund === 'nicht_heizung_zu_gross', 'Anteil zu groß');
 });
 
 test('Holz ohne Heizwert oder Wirkungsgrad ist ein Fehler, ohne Holz nicht', () => {
@@ -113,9 +114,9 @@ test('Holz ohne Heizwert oder Wirkungsgrad ist ein Fehler, ohne Holz nicht', () 
 
 // G20/15 = 100 Kd bei 10 Heiztagen und θ_i = 5 °C: G = 100 − (20 − 5) · 10 = 100 − 150 = −50 Kd, nicht positiv
 test('Nicht positive Gradtagzahl wird als Fehler gemeldet statt negativ gerechnet', () => {
-  const r = berechneVerbrauch(eingabe({ innentemperatur: 5, monate: [{ name: 'X', gradtage: 100, heiztage: 10, heizmonat: true }] }));
+  const r = berechneVerbrauch(eingabe({ innentemperaturIst: { min: 5, max: 5 }, innentemperaturSoll: 5, monate: [{ name: 'X', gradtage: 100, heiztage: 10, heizmonat: true }] }));
   wahr(r.status === 'fehler' && r.grund === 'gradtage_nicht_positiv', 'Fehler erwartet');
-  gleich(r.gradtage.g, -50, 1e-9, 'G = −50');
+  gleich(r.gradtage.oben.g, -50, 1e-9, 'G = −50');
 });
 
 test('Heizmonate: ohne Auswahl und mit unvollständigem Monat gibt es kein Ergebnis', () => {
@@ -176,4 +177,86 @@ test('Mittlere Innentemperatur: flächengewichtet über beheizte und passive Rä
   gleich(mittlereInnentemperatur(raeume), 18.8125, 1e-9, 'Mittelwert');
   wahr(mittlereInnentemperatur([{ status: 'unbeheizt', theta: 5, flaeche: 10 }]) === null, 'ohne beheizte Räume kein Vorschlag');
   wahr(mittlereInnentemperatur([{ status: 'beheizt', theta: 20, flaeche: null }]) === null, 'ohne Fläche kein Vorschlag');
+});
+
+// --- Zwei Innentemperaturen: θ_ist (Gradtage, H) und θ_soll (nur Φ_N) ---------------------------
+//
+// Gleicher Verbrauch wie oben: Q = 20340 bis 22550 kWh, G20/15 = 2450 Kd, 140 Heiztage, θ_N = −8 °C.
+//
+// Fall 1: θ_ist = θ_soll = 21 °C
+//   G = 2450 − (20 − 21) · 140 = 2590 Kd, 24 · G = 62 160
+//   H = 20 340 000 / 62 160 = 327,22 W/K bis 22 550 000 / 62 160 = 362,77 W/K
+//   Φ_N = H · (21 + 8) = H · 29 = 9489,4 W bis 10 520,4 W
+//
+// Fall 2: θ_ist = 19 °C, θ_soll = 21 °C (es war kälter als die Soll-Temperatur)
+//   G = 2450 − (20 − 19) · 140 = 2310 Kd, 24 · G = 55 440
+//   H = 20 340 000 / 55 440 = 366,88 W/K bis 22 550 000 / 55 440 = 406,75 W/K
+//   Φ_N = H · 29 = 10 639,6 W bis 11 795,6 W
+//
+// Eine niedrigere tatsächliche Temperatur bedeutet: dieselbe Wärme wurde bei kleinerem Temperaturunterschied
+// verbraucht, also ist der Wärmeverlust je Kelvin größer. Fall 2 liefert deshalb eine höhere Heizlast als Fall 1.
+test('θ_ist = 19 °C bei θ_soll = 21 °C ergibt ein höheres Φ_N als θ_ist = θ_soll = 21 °C', () => {
+  const gleichwarm = berechneVerbrauch(eingabe({ innentemperaturIst: { min: 21, max: 21 }, innentemperaturSoll: 21 }));
+  const kaelter = berechneVerbrauch(eingabe({ innentemperaturIst: { min: 19, max: 19 }, innentemperaturSoll: 21 }));
+  gleich(gleichwarm.gradtage.unten.g, 2590, 1e-9, 'G bei 21 °C');
+  gleich(kaelter.gradtage.unten.g, 2310, 1e-9, 'G bei 19 °C');
+  gleich(gleichwarm.heizlast.min, 9489.4, 0.1, 'Φ_N unten, θ_ist = 21 °C');
+  gleich(gleichwarm.heizlast.max, 10520.4, 0.1, 'Φ_N oben, θ_ist = 21 °C');
+  gleich(kaelter.h.min, 366.88, 0.01, 'H unten, θ_ist = 19 °C');
+  gleich(kaelter.h.max, 406.75, 0.01, 'H oben, θ_ist = 19 °C');
+  gleich(kaelter.heizlast.min, 10639.6, 0.1, 'Φ_N unten, θ_ist = 19 °C');
+  gleich(kaelter.heizlast.max, 11795.6, 0.1, 'Φ_N oben, θ_ist = 19 °C');
+  wahr(kaelter.heizlast.min > gleichwarm.heizlast.min && kaelter.heizlast.max > gleichwarm.heizlast.max, 'Φ_N ist bei θ_ist = 19 °C höher');
+});
+
+// θ_ist als Bereich 19 bis 21 °C: unten θ_ist-Maximum (21 °C, G = 2590 Kd), oben θ_ist-Minimum (19 °C, G = 2310 Kd)
+//   unten: H = 20 340 000 / 62 160 = 327,22 W/K → Φ_N = 9489,4 W
+//   oben:  H = 22 550 000 / 55 440 = 406,75 W/K → Φ_N = 11 795,6 W
+test('θ_ist als Bereich: unten das Maximum, oben das Minimum der tatsächlichen Temperatur', () => {
+  const r = berechneVerbrauch(eingabe({ innentemperaturIst: { min: 19, max: 21 }, innentemperaturSoll: 21 }));
+  gleich(r.gradtage.unten.g, 2590, 1e-9, 'unterer Wert nutzt θ_ist-Maximum 21 °C');
+  gleich(r.gradtage.oben.g, 2310, 1e-9, 'oberer Wert nutzt θ_ist-Minimum 19 °C');
+  gleich(r.heizlast.min, 9489.4, 0.1, 'Φ_N unten');
+  gleich(r.heizlast.max, 11795.6, 0.1, 'Φ_N oben');
+  gleich(r.heizlast.mittel, 10642.5, 0.1, 'Φ_N Mittel');
+  wahr(r.gradtage.unten.g > r.gradtage.oben.g, 'niedrigere Temperatur ergibt kleinere Gradtagzahl');
+});
+
+// θ_soll wirkt nur auf Φ_N: bei θ_soll = 23 °C ist ΔT = 23 + 8 = 31 K, H bleibt gleich.
+//   Φ_N = 327,22 · 31 = 10 143,8 W bis 362,77 · 31 = 11 246,0 W
+test('θ_soll verändert nur Φ_N, nicht H', () => {
+  const a = berechneVerbrauch(eingabe({ innentemperaturIst: { min: 21, max: 21 }, innentemperaturSoll: 21 }));
+  const b = berechneVerbrauch(eingabe({ innentemperaturIst: { min: 21, max: 21 }, innentemperaturSoll: 23 }));
+  gleich(b.h.min, a.h.min, 1e-9, 'H unten unverändert');
+  gleich(b.h.max, a.h.max, 1e-9, 'H oben unverändert');
+  gleich(b.deltaT, 31, 1e-9, 'ΔT = 23 − (−8)');
+  gleich(b.heizlast.min, 10143.8, 0.1, 'Φ_N unten');
+  gleich(b.heizlast.max, 11246.0, 0.1, 'Φ_N oben');
+});
+
+test('θ_ist fehlt oder ist unvollständig: kein Ergebnis', () => {
+  wahr(berechneVerbrauch(eingabe({ innentemperaturIst: { min: null, max: null } })).grund === 'angaben_fehlen', 'leer');
+  wahr(berechneVerbrauch(eingabe({ innentemperaturIst: { min: 19, max: null } })).grund === 'angaben_fehlen', 'nur Minimum');
+  wahr(berechneVerbrauch(eingabe({ innentemperaturSoll: null })).grund === 'angaben_fehlen', 'θ_soll fehlt');
+});
+
+test('Annahmen nennen beide Innentemperaturen und die Richtung der Bandbreite', () => {
+  const e = eingabe({ innentemperaturIst: { min: 19, max: 21 }, innentemperaturSoll: 22 });
+  const text = annahmen(e, berechneVerbrauch(e)).join('\n');
+  for (const erwartet of [
+    'θ_ist = 19 bis 21 °C', 'Unterer Wert (θ_ist-Maximum 21 °C)', 'Oberer Wert (θ_ist-Minimum 19 °C)', '2590 Kd', '2310 Kd',
+    'θ_soll = 22 °C', 'Φ_N = H · (θ_soll − θ_N)', 'davon nicht für Heizung (Warmwasser, Gasherd, Sonstiges)',
+  ]) {
+    wahr(text.includes(erwartet), `Annahmen enthalten "${erwartet}"`);
+  }
+});
+
+test('Ältere Verbrauchsabgleiche werden übernommen, die tatsächliche Temperatur bleibt leer', () => {
+  const alt = { id: 'v1', name: 'Alt', gasKwh: 1000, warmwasserKwh: 200, innentemperatur: 20.5, monate: [] };
+  const neu = migriereVerbrauch(alt);
+  wahr(neu.nichtFuerHeizungKwh === 200 && !('warmwasserKwh' in neu), 'Warmwasser wird zum Nicht-Heizungs-Anteil');
+  wahr(neu.innentemperaturSoll === 20.5 && !('innentemperatur' in neu), 'frühere Innentemperatur wird zur Soll-Temperatur');
+  wahr(neu.innentemperaturIst.min === null && neu.innentemperaturIst.max === null, 'tatsächliche Temperatur bleibt leer, wird nicht geraten');
+  wahr(migriereVerbrauch(neu).nichtFuerHeizungKwh === 200, 'erneute Übernahme ändert nichts');
+  wahr(berechneVerbrauch({ ...neu, normAussentemperatur: -8, kesselNutzungsgrad: { min: 90, max: 92 } }).status === 'fehler', 'ohne tatsächliche Temperatur kein Ergebnis');
 });

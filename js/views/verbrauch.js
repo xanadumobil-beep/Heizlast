@@ -5,7 +5,7 @@ import { el, ersetzeKinder, baueFormular } from '../ui.js';
 import { ladeProjekt, rechne } from '../daten.js';
 import { formatZahl, formatBereich, zahlZuText, parseDezimal } from '../engine/format.js';
 import { berechneVerbrauch, vergleiche, annahmen, FREMDWAERME_HINWEIS } from '../engine/verbrauch.js';
-import { mittlereInnentemperatur } from '../modell.js';
+import { mittlereInnentemperatur, migriereVerbrauch } from '../modell.js';
 import { hatFehler, hatWarnungen, validiereVerbrauch } from '../validate.js';
 import { verbrauchFelder, neuerVerbrauch, HEIZPERIODE_MONATE } from '../schemas.js';
 
@@ -16,7 +16,7 @@ const mitVorzeichen = (x, stellen = 1) => `${x > 0 ? '+' : ''}${formatZahl(x, st
 const FEHLER_TEXT = {
   angaben_fehlen: 'Es fehlen Angaben.',
   holz_angaben_fehlen: 'Für das Holz fehlen Heizwert oder Wirkungsgrad.',
-  warmwasser_zu_gross: 'Das Warmwasser ist größer als der Gasverbrauch.',
+  nicht_heizung_zu_gross: 'Der Anteil nicht für Heizung ist größer als der Gasverbrauch.',
   monat_unvollstaendig: 'Ein gewählter Heizmonat ist unvollständig.',
   keine_heizmonate: 'Es ist kein Heizmonat gewählt.',
   gradtage_nicht_positiv: 'Die umgerechnete Gradtagzahl ist nicht positiv.',
@@ -33,13 +33,14 @@ function berechneteBandbreite(ergebnis) {
 function engineEingabe(doc, projekt) {
   return {
     gasKwh: doc.gasKwh,
-    warmwasserKwh: doc.warmwasserKwh,
+    nichtFuerHeizungKwh: doc.nichtFuerHeizungKwh,
     kesselNutzungsgrad: doc.kesselNutzungsgrad,
     holzRm: doc.holzRm,
     heizwertRm: doc.heizwertRm,
     ofenWirkungsgrad: doc.ofenWirkungsgrad,
     monate: doc.monate ?? [],
-    innentemperatur: doc.innentemperatur,
+    innentemperaturIst: doc.innentemperaturIst,
+    innentemperaturSoll: doc.innentemperaturSoll,
     normAussentemperatur: projekt.einstellungen.thetaAussen,
   };
 }
@@ -67,7 +68,7 @@ function ergebnisBloecke(doc, projekt, berechnet) {
     return [el(
       'section', { class: 'karte' },
       el('h3', {}, 'Ergebnis'),
-      el('p', { class: 'zeile' }, 'Das Ergebnis erscheint, sobald alle Pflichtangaben stimmen: Gasverbrauch, Kesselnutzungsgrad, Innentemperatur und mindestens ein vollständiger Heizmonat.'),
+      el('p', { class: 'zeile' }, 'Das Ergebnis erscheint, sobald alle Pflichtangaben stimmen: Gasverbrauch, Kesselnutzungsgrad, tatsächliche und Soll-Innentemperatur und mindestens ein vollständiger Heizmonat.'),
     )];
   }
   if (ergebnis.status !== 'ok') {
@@ -106,7 +107,7 @@ function ergebnisBloecke(doc, projekt, berechnet) {
         el('tbody', {}, [
           ['Spezifischer Wärmeverlust H', `${formatBereich(ergebnis.h.min, ergebnis.h.max, 1)} W/K`],
           ['Nutzwärme Q', `${formatBereich(ergebnis.waerme.min, ergebnis.waerme.max, 0)} kWh`],
-          ['Gradtagzahl G (umgerechnet)', `${formatZahl(ergebnis.gradtage.g, 0)} Kd`],
+          ['Gradtagzahl G (umgerechnet)', `${formatBereich(ergebnis.gradtage.oben.g, ergebnis.gradtage.unten.g, 0)} Kd`],
         ].map(([name, wert]) => el('tr', {}, el('th', { scope: 'row' }, name), el('td', { class: 'zahl' }, wert)))),
       ),
     ),
@@ -211,7 +212,8 @@ function baueMonate(startMonate, beiAenderung) {
 // --- Editor ------------------------------------------------------------------------------
 
 export async function renderVerbrauch(container, id, neuLaden) {
-  const [projekt, vorhandene] = await Promise.all([ladeProjekt(), db.alle('consumption')]);
+  const [projekt, roh] = await Promise.all([ladeProjekt(), db.alle('consumption')]);
+  const vorhandene = roh.map(migriereVerbrauch);
   const gespeichert = id === 'neu' ? null : vorhandene.find((v) => v.id === id);
   if (id !== 'neu' && !gespeichert) {
     ersetzeKinder(
@@ -271,8 +273,8 @@ export async function renderVerbrauch(container, id, neuLaden) {
     ? null
     : el('button', {
       type: 'button',
-      onClick: () => formular.setzeFeld('innentemperatur', vorschlag),
-    }, `Innentemperatur auf Vorschlag setzen (${zahlZuText(vorschlag)} °C)`);
+      onClick: () => formular.setzeFeld('innentemperaturSoll', vorschlag),
+    }, `Soll-Innentemperatur auf Vorschlag setzen (${zahlZuText(vorschlag)} °C)`);
 
   ersetzeKinder(
     container,
@@ -299,7 +301,8 @@ export async function renderVerbrauch(container, id, neuLaden) {
 // --- Liste -------------------------------------------------------------------------------
 
 export async function renderVerbrauchListe(container, neuLaden) {
-  const [projekt, alle] = await Promise.all([ladeProjekt(), db.alle('consumption')]);
+  const [projekt, roh] = await Promise.all([ladeProjekt(), db.alle('consumption')]);
+  const alle = roh.map(migriereVerbrauch);
   const berechnet = berechneteBandbreite(rechne(projekt).ergebnis);
   alle.sort((a, b) => a.name.localeCompare(b.name, 'de'));
 

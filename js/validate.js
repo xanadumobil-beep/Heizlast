@@ -276,14 +276,17 @@ export function validiereVerbrauch(v) {
   const meldungen = [
     ...pflichtText('name', v.name, 'Verbrauchsabgleich'),
     ...zahl('gasKwh', v.gasKwh, { name: 'Gasverbrauch', einheit: 'kWh', fehlerWennKleiner: 0, warnWennUeber: 100000 }),
-    ...zahl('warmwasserKwh', v.warmwasserKwh, { name: 'Warmwasser', einheit: 'kWh', fehlerWennKleiner: 0 }),
+    ...zahl('nichtFuerHeizungKwh', v.nichtFuerHeizungKwh, { name: 'Anteil nicht für Heizung', einheit: 'kWh', fehlerWennKleiner: 0 }),
     ...bereich('kesselNutzungsgrad', v.kesselNutzungsgrad, {
       name: 'Kesselnutzungsgrad', einheit: '%', fehlerWennKleinerGleich: 0, warnWennUeber: 100, warnWennUnter: 50,
     }),
-    ...zahl('innentemperatur', v.innentemperatur, { name: 'Mittlere Innentemperatur', einheit: '°C', warnWennUeber: 25, warnWennUnter: 15 }),
+    ...bereich('innentemperaturIst', v.innentemperaturIst, {
+      name: 'Tatsächliche Innentemperatur', einheit: '°C', warnWennUeber: 25, warnWennUnter: 15,
+    }),
+    ...zahl('innentemperaturSoll', v.innentemperaturSoll, { name: 'Soll-Innentemperatur', einheit: '°C', warnWennUeber: 25, warnWennUnter: 15 }),
   ];
-  if (istZahl(v.gasKwh) && istZahl(v.warmwasserKwh) && v.warmwasserKwh > v.gasKwh) {
-    meldungen.push(fehler('warmwasserKwh', 'Warmwasser darf nicht größer sein als der Gasverbrauch.'));
+  if (istZahl(v.gasKwh) && istZahl(v.nichtFuerHeizungKwh) && v.nichtFuerHeizungKwh > v.gasKwh) {
+    meldungen.push(fehler('nichtFuerHeizungKwh', 'Der Anteil nicht für Heizung darf nicht größer sein als der Gasverbrauch.'));
   }
   if (istZahl(v.kesselNutzungsgrad?.max) && v.kesselNutzungsgrad.max > 100) {
     meldungen.push(warnung('kesselNutzungsgrad', `Der Nutzungsgrad liegt über 100 %. ${'Bezogen auf Brennwert Hs, wie in der Gasrechnung'} sind Werte über 100 % unüblich.`));
@@ -326,10 +329,11 @@ export function validiereVerbrauch(v) {
   }
 
   // Nach der Umrechnung auf die Innentemperatur muss die Gradtagzahl positiv bleiben.
-  if (monateOk && istZahl(v.innentemperatur)) {
-    const g = gradtage(monate, v.innentemperatur);
+  // Der ungünstigste Fall ist die niedrigste tatsächliche Innentemperatur.
+  if (monateOk && istZahl(v.innentemperaturIst?.min)) {
+    const g = gradtage(monate, v.innentemperaturIst.min);
     if (!(g.g > 0)) {
-      meldungen.push(fehler('innentemperatur', 'Bei dieser Innentemperatur wird die umgerechnete Gradtagzahl nicht positiv. Bitte Innentemperatur und Gradtage prüfen.'));
+      meldungen.push(fehler('innentemperaturIst', 'Bei dieser Innentemperatur wird die umgerechnete Gradtagzahl nicht positiv. Bitte Innentemperatur und Gradtage prüfen.'));
     }
   }
   return meldungen;

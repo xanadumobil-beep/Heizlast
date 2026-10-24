@@ -2,7 +2,7 @@
 // Die Feldlisten steuern die Formulare, die Validierung steht in validate.js.
 
 import { zahlZuText } from './engine/format.js';
-import { HS_HINWEIS } from './engine/verbrauch.js';
+import { HS_HINWEIS, IST_HINWEIS } from './engine/verbrauch.js';
 
 export const BAUTEILARTEN = [
   { wert: 'aussenwand', label: 'Außenwand' },
@@ -401,13 +401,15 @@ export const HEIZPERIODE_MONATE = [
   'Oktober', 'November', 'Dezember', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September',
 ];
 
-// Nutzungsgrade, Heizwerte und Gradtage werden nie vorbelegt. Nur Warmwasser startet mit 0 und die
-// Innentemperatur mit dem Vorschlag aus den Räumen (beides sichtbar und änderbar).
-export function neuerVerbrauch(innentemperatur) {
+// Nutzungsgrade, Heizwerte, Gradtage und die tatsächliche Innentemperatur werden nie vorbelegt. Nur der
+// Nicht-Heizungs-Anteil startet mit 0 und die Soll-Innentemperatur mit dem Vorschlag aus den Räumen
+// (beides sichtbar und änderbar).
+export function neuerVerbrauch(innentemperaturSoll) {
   return {
-    name: '', gasKwh: null, warmwasserKwh: 0, kesselNutzungsgrad: { min: null, max: null },
+    name: '', gasKwh: null, nichtFuerHeizungKwh: 0, kesselNutzungsgrad: { min: null, max: null },
     holzRm: null, heizwertRm: null, ofenWirkungsgrad: null,
-    innentemperatur: innentemperatur ?? null, monate: [], notiz: '',
+    innentemperaturIst: { min: null, max: null }, innentemperaturSoll: innentemperaturSoll ?? null,
+    monate: [], notiz: '',
   };
 }
 
@@ -416,8 +418,9 @@ export function verbrauchFelder({ vorschlag }) {
     { key: 'name', label: 'Bezeichnung', typ: 'text', hinweis: 'Zum Beispiel „Heizperiode 2023/24“.' },
     { key: 'gasKwh', label: 'Gasverbrauch im Zeitraum', typ: 'zahl', einheit: 'kWh', hinweis: 'Laut Gasrechnung in kWh.' },
     {
-      key: 'warmwasserKwh', label: 'Davon Warmwasser (wird abgezogen)', typ: 'zahl', einheit: 'kWh',
-      hinweis: 'Gas für Warmwasser gehört nicht zur Heizung. Startwert 0: dann zählt der ganze Gasverbrauch als Heizung, und die Heizlast fällt zu hoch aus.',
+      key: 'nichtFuerHeizungKwh', label: 'Davon nicht für Heizung (Warmwasser, Gasherd, Sonstiges)', typ: 'zahl', einheit: 'kWh',
+      hinweis: 'Gas, das nicht zum Heizen diente, wird vom Gasverbrauch abgezogen. Startwert 0: dann zählt der ganze Gasverbrauch '
+        + 'als Heizung, und die Heizlast fällt zu hoch aus.',
     },
     {
       key: 'kesselNutzungsgrad', label: 'Kesselnutzungsgrad', typ: 'bereich', einheit: '%',
@@ -430,8 +433,13 @@ export function verbrauchFelder({ vorschlag }) {
     },
     { key: 'ofenWirkungsgrad', label: 'Wirkungsgrad Kaminofen (nur mit Holz)', typ: 'bereich', optional: true, einheit: '%' },
     {
-      key: 'innentemperatur', label: 'Mittlere Innentemperatur', typ: 'zahl', einheit: '°C',
-      hinweis: 'Für die Umrechnung der Gradtage und die Hochrechnung auf die Normaußentemperatur. '
+      key: 'innentemperaturIst', label: 'Tatsächliche mittlere Innentemperatur im Verbrauchszeitraum', typ: 'bereich', einheit: '°C',
+      hinweis: `${IST_HINWEIS} Minimum und Maximum, weil du die Temperatur nur schätzen kannst. Sie geht in die Gradtag-Umrechnung und damit `
+        + 'in den Wärmeverlust H ein. Pflichtangabe, es gibt keinen Vorgabewert.',
+    },
+    {
+      key: 'innentemperaturSoll', label: 'Mittlere Soll-Innentemperatur für die Auslegung', typ: 'zahl', einheit: '°C',
+      hinweis: 'Nur für die Hochrechnung Φ_N = H · (θ_soll − θ_N). '
         + (vorschlag === null
           ? 'Ohne beheizte oder passive Räume gibt es keinen Vorschlag.'
           : `Vorschlag: ${zahlZuText(vorschlag)} °C, der flächengewichtete Mittelwert der Soll-Temperaturen aller beheizten und passiven Räume.`),

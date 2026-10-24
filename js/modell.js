@@ -238,3 +238,16 @@ export function mittlereInnentemperatur(raeume) {
   if (flaeche === 0) return null;
   return gezaehlt.reduce((s, r) => s + r.theta * r.flaeche, 0) / flaeche;
 }
+
+// Übernahme älterer Verbrauchsabgleiche: "warmwasserKwh" heißt jetzt "nichtFuerHeizungKwh". Die frühere
+// einzelne Innentemperatur wird zur Soll-Innentemperatur (so wurde sie für Φ_N genutzt). Die tatsächliche
+// Innentemperatur bleibt bewusst leer: sie muss neu eingetragen werden, die App rät sie nicht.
+export function migriereVerbrauch(doc) {
+  const neu = { ...doc };
+  if (neu.nichtFuerHeizungKwh === undefined && 'warmwasserKwh' in neu) neu.nichtFuerHeizungKwh = neu.warmwasserKwh;
+  delete neu.warmwasserKwh;
+  if (neu.innentemperaturSoll === undefined) neu.innentemperaturSoll = typeof neu.innentemperatur === 'number' ? neu.innentemperatur : null;
+  if (neu.innentemperaturIst === undefined) neu.innentemperaturIst = { min: null, max: null };
+  delete neu.innentemperatur;
+  return neu;
+}
