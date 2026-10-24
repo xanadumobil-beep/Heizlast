@@ -13,6 +13,7 @@ import { raumVolumen, nettoFlaeche, flaecheAusMassen, oeffnungsGesamtflaeche } f
 import { datumText, inhaltsHinweise } from './io.js';
 import { baueplan, pruefZeilen } from './plan.js';
 import { baueVergleich, vergleichTabellen, bandText } from './vergleich.js';
+import { baueErgebnis, ergebnisBloecke } from './ergebnis.js';
 import { szenarioInfo, kostenNachFoerderung, kostenEingetragen } from './szenario.js';
 import {
   watt, wattBereich, wattBereichVon, mitVorzeichen, raumName, flaechenBezeichnung, angrenzendText, massText,
@@ -420,6 +421,8 @@ export function baueBericht(projekt, jetzt = new Date(), optionen = {}) {
       titel: 'Ergebnis auf einen Blick',
       bloecke: [
         ...(szenario ? [box(`Dieser Bericht gilt für das Szenario „${szenario.name}“, nicht für den Ist-Zustand. Alle Werte enthalten die Abweichungen des Szenarios.`)] : []),
+        ...ergebnisBloecke(baueErgebnis(szenario ? { ...projekt, szenario: { name: szenario.name } } : projekt, { mitVerbrauch: !szenario })),
+        zwischentitel('Weitere Kennzahlen'),
         ...uebersicht(ctx).map((b) => (szenario && b.art === 'paare' ? { ...b, zeilen: b.zeilen.filter((r) => !r[0].startsWith('Verbrauchsabgleich')) } : b)),
       ],
     },

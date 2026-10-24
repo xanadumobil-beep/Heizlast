@@ -15,11 +15,13 @@ import { renderVerbrauch, renderVerbrauchListe } from './views/verbrauch.js';
 import { renderSicherung } from './views/sicherung.js';
 import { renderBericht } from './views/bericht.js';
 import { renderPlan } from './views/plan.js';
+import { renderErgebnis } from './views/ergebnis.js';
 import { renderFoto } from './views/fotos.js';
 import { aktualisiereBanner } from './banner.js';
 
 // render(container, neuLaden, parameter, extra): parameter ist der Teil nach dem Schrägstrich im Link.
 const TABS = [
+  { id: 'ergebnis', titel: 'Ergebnis', render: (c, neu) => renderErgebnis(c, neu) },
   { id: 'raeume', titel: 'Räume', render: (c, neu, id) => (id ? renderRaum(c, id, neu) : renderRaeume(c, neu)) },
   { id: 'plan', titel: 'Plan', render: (c) => renderPlan(c) },
   { id: 'vorlauf', titel: 'Vorlauf', render: (c) => renderVorlauf(c) },
@@ -42,7 +44,7 @@ const inhalt = document.getElementById('inhalt');
 const navigation = document.getElementById('navigation');
 let zeichnung = 0;
 
-// Links: #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bericht, #bauteile, #oeffnungen, #zonen, #sicherung, #einstellungen
+// Links: #ergebnis, #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bericht, #bauteile, #oeffnungen, #zonen, #sicherung, #einstellungen
 function aktuelleRoute() {
   const [erster, parameter, extra] = location.hash.slice(1).split('/');
   const tabId = erster === 'raum' ? 'raeume' : erster;

@@ -559,3 +559,43 @@ label.knopf input.versteckt { display: none; }
 .b-marke.fehlt { background: #d32f2f; }
 .b-foto-legende { margin: 4px 0 0 20px; padding: 0; font-size: 0.9rem; }
 .b-foto-notiz { margin: 4px 0 0; font-size: 0.9rem; }
+
+/* Ergebnis */
+.ergebnis-spalten { display: grid; gap: 12px; margin: 6px 0; }
+.ergebnis-spalten.n2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.ergebnis-spalte { min-width: 0; }
+.ergebnis-spalte h4 { margin: 0 0 6px; }
+.ergebnis-abschnitt h3 { margin-top: 0; }
+.ergebnis-ampel { padding: 10px 14px; border: 1px solid var(--linie); border-left-width: 8px; border-radius: var(--radius); margin: 8px 0; background: var(--flaeche); }
+.ergebnis-ampel.gruen { border-left-color: var(--ok); }
+.ergebnis-ampel.gelb { border-left-color: var(--warnung); background: var(--warnung-bg); }
+.ergebnis-ampel.rot { border-left-color: var(--fehler); background: var(--fehler-bg); }
+.ergebnis-ampel .ampel-punkt { font-size: 1.2rem; }
+.ergebnis-ampel.gruen .ampel-punkt { color: var(--ok); }
+.ergebnis-ampel.gelb .ampel-punkt { color: var(--warnung); }
+.ergebnis-ampel.rot .ampel-punkt { color: var(--fehler); }
+.ergebnis-ampel .ampel-kopf { margin: 0 0 4px; }
+.ampel-zaehler { list-style: none; padding: 0; margin: 4px 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.ampel-zaehler li.offen { color: var(--fehler); }
+.bandbreite, .obere { display: grid; gap: 2px; margin: 6px 0; }
+.obere { padding: 8px 12px; border: 2px solid var(--akzent); border-radius: var(--radius); }
+.obere .gross, .bandbreite .gross { font-size: 1.5rem; }
+.verlustzeile { display: grid; grid-template-columns: minmax(90px, 140px) 1fr minmax(110px, auto); gap: 8px; align-items: center; margin: 4px 0; }
+.v-balken { display: block; height: 14px; background: var(--bg); border: 1px solid var(--linie); border-radius: 7px; overflow: hidden; }
+.v-balken > span { display: block; height: 100%; background: var(--akzent); }
+.v-wert { text-align: right; font-variant-numeric: tabular-nums; }
+.benoetigt { font-weight: 700; font-size: 1.1rem; margin: 8px 0; }
+.zuschlagtabelle { width: 100%; }
+.zuschlagtabelle .begruendung td { color: var(--text-leise); font-size: 0.9rem; }
+.zuschlagtabelle tr.summe th, .zuschlagtabelle tr.summe td { font-weight: 700; border-top: 2px solid var(--text-leise); }
+.sperrfeld { margin: 6px 0 10px; }
+.sperrfeld label { display: grid; gap: 2px; max-width: 280px; }
+.linien-svg { width: 100%; max-width: 420px; height: auto; display: block; }
+.linien-svg .achse { stroke: var(--text-leise); stroke-width: 1; }
+.linien-svg .band { fill: var(--akzent); opacity: 0.2; }
+.linien-svg .linie-max, .linien-svg .linie-min { fill: none; stroke: var(--akzent); stroke-width: 2; }
+.linien-svg .linie-min { stroke-dasharray: 4 3; }
+.linien-svg .achsentext { fill: var(--text-leise); font-size: 10px; }
+.linientabelle { width: 100%; margin-top: 6px; }
+.luecken li.rot { color: var(--fehler); }
+.plausi { margin: 4px 0; padding-left: 18px; }

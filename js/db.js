@@ -99,6 +99,13 @@ export async function speichereVergleichsannahmen(annahmen) {
   await ausfuehren('settings', 'readwrite', (s) => s.put({ ...aktuell, vergleich: annahmen }));
 }
 
+// Annahmen zur Wärmepumpe (einstellungen.waermepumpe, derzeit die Sperrstunden des Netzbetreibers). Wie die Vergleichsannahmen
+// sind das Eingaben für die Auslegung und keine Bestandsdaten, sie bleiben im Szenario-Betrieb bearbeitbar.
+export async function speichereWaermepumpenannahmen(annahmen) {
+  const aktuell = await ladeEinstellungen();
+  await ausfuehren('settings', 'readwrite', (s) => s.put({ ...aktuell, waermepumpe: annahmen }));
+}
+
 // Umfang der Fotos und Baupläne im Speicher: Anzahl und Byte (Bild und Vorschau).
 export async function fotoSpeicher() {
   const [fotos, hintergruende] = await Promise.all([alle('photos'), alle('backgrounds')]);

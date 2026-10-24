@@ -204,6 +204,11 @@ als fehlerhaft markiert.
 | `heizkoerper[].material` | `""`, `stahl`, `guss`, `aluminium`, `sonstiges` |
 | `heizkoerper[].ventil` | `neu`, `alt` |
 
+## `daten.einstellungen.waermepumpe` (optional)
+
+Annahmen für den Bereich „Ergebnis“: `{ "sperrstunden": 2 }`. Sperrzeit des Netzbetreibers in Stunden je Tag (0 bis unter 24). Fehlt das Feld,
+gilt 0 und es gibt keinen Zuschlag. Zuschlag = Heizlast · 24 / (24 − Sperrstunden) − Heizlast. Alte Dateien ohne dieses Feld bleiben lesbar.
+
 ## `daten.einstellungen.vergleich` (optional)
 
 Annahmen für die Jahreswärme-Differenz im Szenarienvergleich: `{ "gradtage": { "quelle": "verbrauch" | "manuell", "verbrauchId": "<id>" | null,
@@ -252,6 +257,13 @@ gelöschtes Element, bleibt die Markierung erhalten und die App zeigt „Verknü
 Seitenverhältnis des (gedrehten) Bildes an. Die Prozent-Positionen der Raum- und Zonenkästen (`plan`) bleiben gültig.
 
 **Nicht ins öffentliche Repository:** Fotos und Baupläne enthalten echte Hausdaten (oft auch Namen und Adressen im Schriftfeld). Das Beispielhaus enthält keine.
+
+## Vorbereitet: Katalog der Wärmepumpenmodelle (noch nicht gebaut)
+
+Geplant ist ein Katalog `waermepumpen` (eigener Speicher, eigene Liste in `daten`). Ein Modell hätte: `id`, `hersteller`, `name`, `leistung` als Liste
+von Punkten `{ "aussen": <°C>, "vorlauf": <°C>, "heizleistung": <W> }` (Datenblattwerte bei mehreren Außen- und Vorlauftemperaturen, zum Beispiel
+−10, −7, 2, 7 °C), `kleinsteLeistung` (W, Modulation) und `schallleistung` (dB(A)). Verglichen würde die Heizlastlinie aus dem Bereich „Ergebnis“
+(untere und obere Grenze bei −8 bis +12 °C) mit der Datenblatt-Heizleistung bei der nötigen Vorlauftemperatur. Dafür gibt es bisher keinen Code und keine Daten.
 
 ## Vorbereitet für spätere Stufen
 

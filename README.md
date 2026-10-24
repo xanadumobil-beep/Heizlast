@@ -9,6 +9,10 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
 
 ## Was die App kann
 
+- **Ergebnis (erster Tab):** Gesamtheizlast als Bandbreite mit Mittelwert und hervorgehobener oberer Grenze, Aufteilung nach Verlustart, die
+  benötigte Wärmepumpenleistung („Benötigt: X kW Heizleistung bei −8 °C Außentemperatur und Y °C Vorlauf“), die Heizlast bei −8 bis +12 °C als Linie,
+  der Verbrauchsabgleich als Plausibilitätsprüfung und eine Datenqualitäts-Ampel. Zuschläge gibt es nur auf Eingabe (Sperrzeit des Netzbetreibers in
+  Stunden je Tag), jeweils mit Begründung, ohne pauschalen Sicherheitszuschlag. Oben lässt sich ein Szenario daneben stellen. Das Ergebnis ist die erste Seite des Berichts.
 - **Räume und Flächen:** Maße oder Flächen, Bauteile mit U-Wert (Bereich von bis), Fenster und Türen, Zonen
   (Erdreich, Nachbar, unbeheizter Keller und so weiter), Luftwechsel je Raum.
 - **Heizlast je Raum und für das Gebäude** bei der Normaußentemperatur, als Bandbreite, mit Gegenprobe der

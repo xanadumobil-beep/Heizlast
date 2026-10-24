@@ -52,7 +52,7 @@ test('Bericht: alle geforderten Abschnitte, durchnummeriert', async () => {
 
 test('Bericht: Ergebnis auf einen Blick mit Gebäudeheizlast als Bandbreite, Vorlauf und Verbrauch', async () => {
   const b = baueBericht(await beispielProjekt(), jetzt);
-  const zeilen = abschnitt(b, 'Ergebnis').bloecke[0].zeilen;
+  const zeilen = abschnitt(b, 'Ergebnis').bloecke.find((x) => x.art === 'paare' && x.zeilen.some((z) => z[0].includes('Gegenprobe'))).zeilen;
   const wert = (name) => zeilen.find((z) => z[0].includes(name))?.[1] ?? '';
   wahr(wert('Gebäudeheizlast').startsWith('2332 – 3816 W') && wert('Gebäudeheizlast').includes('Mittel 3074 W'), `Gebäudeheizlast: ${wert('Gebäudeheizlast')}`);
   wahr(wert('Gegenprobe').startsWith('bestanden'), 'Gegenprobe bestanden');
