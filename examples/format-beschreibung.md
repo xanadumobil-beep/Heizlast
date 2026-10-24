@@ -135,6 +135,70 @@ Je Eintrag ein Abgleich einer Heizperiode.
 | `monate` | je Monat `id`, `name`, `gradtage` (G20/15 in Kd), `heiztage`, `heizmonat` (`true`, wenn geheizt wurde; nur diese Monate zählen) |
 | `notiz` | freier Text |
 
+## Pflicht oder optional, und wie Verweise aufgebaut sind
+
+**Allgemein:** Alle Felder immer angeben, nicht Verwendetes mit `null` (oder `[]` bei Listen). Die Schlüssel sind
+**deutsch** (`einstellungen`, `zonen`, `bauteile`, `oeffnungstypen`, `raeume`, `raumflaechen`, `heizkoerper`, `verbrauch`),
+nicht die englischen Namen der internen Datenbank.
+
+**Harte Fehler (Import wird abgelehnt):** kein gültiges JSON, `format` ist nicht `"heizlast-projekt"`, `schemaVersion` fehlt
+oder ist größer als 1, `daten` fehlt, eine Liste ist keine Liste, ein Eintrag hat keine oder eine leere `id`, eine `id`
+kommt innerhalb ihrer Liste doppelt vor, Öffnungs-IDs oder Heizkörper-IDs kommen doppelt vor.
+Alles andere (unbekannte Verweise, unplausible Werte, fehlende Leistung) führt nicht zum Abbruch, sondern zu Hinweisen
+und Markierungen in der App.
+
+**IDs:** Text, nicht leer, innerhalb einer Liste eindeutig, dauerhaft. Eindeutig sein müssen insbesondere die IDs aller
+Öffnungen (sie stecken in den Raumflächen) und aller Heizkörper über die gesamte Datei. Die Monate im Verbrauchsabgleich
+bekommen ebenfalls eine `id` je Monat. Öffnungen ohne `id` bekommt die App eine zufällige, aber dann nicht von dir
+vorhersehbare ID. Besser immer selbst vergeben.
+
+**Verweise** (Ziel muss als `id` in der Datei vorkommen):
+
+| Von | Feld | Ziel |
+|---|---|---|
+| Raumfläche | `raumId` | `raeume[].id` (der Raum, zu dem die Fläche gehört) |
+| Raumfläche | `bauteilId` | `bauteile[].id` |
+| Raumfläche | `angrenzend.zoneId` (bei `art: "zone"`) | `zonen[].id` |
+| Raumfläche | `angrenzend.raumId` (bei `art: "raum"`) | `raeume[].id` (Gegenseite) |
+| Öffnung | `typId` | `oeffnungstypen[].id` |
+| Heizkörper | `raumId` | `raeume[].id` (beheizter Raum) |
+| Raum (passiv) | `waermeLieferanten[].raumId` | `raeume[].id` (beheizte Räume, Summe der Prozente 100) |
+
+Bei `angrenzend.art` `"aussen"` gibt es kein weiteres Feld. Bei `"zone"` steht nur `zoneId`, bei `"raum"` nur `raumId`.
+
+**Pflicht (P) und optional (o)** je Bereich. „P“ heißt: ohne den Wert ist der Eintrag nicht berechenbar oder wird in der App
+als fehlerhaft markiert.
+
+| Bereich | Pflicht | Optional |
+|---|---|---|
+| `einstellungen` | nichts (fehlende Felder erhalten Standardwerte) | alle Felder |
+| `zonen` | `id`, `name`, `art`, `temperatur.min`, `temperatur.max` | `notiz` |
+| `bauteile` | `id`, `name`, `art`, `u.min`, `u.max` (größer 0), `quelle` | `aufbau` |
+| `oeffnungstypen` | `id`, `name`, `art`, `uw` (größer 0), `quelle` | |
+| `raeume` | `id`, `name`, `geschoss`, `status`, `theta` (bei `unbeheizt` darf `null` sein), `flaeche` und `hoehe` (oder `volumenManuell`), bei `passiv` die `waermeLieferanten` | `volumenManuell`, `luftwechsel`, `notiz` |
+| `raumflaechen` | `id`, `raumId`, `bauteilId`, `angrenzend`, `modus` und dazu passend `laenge` + `hoehe` oder `flaeche` | `name`, `notiz`, `oeffnungen` (Liste, darf leer sein) |
+| Öffnung | `id`, `typId`, `modus` und dazu passend `laenge` (Breite) + `hoehe` oder `flaeche`, `anzahl` (ganze Zahl ab 1) | `name` |
+| `heizkoerper` | `id`, `raumId`, `bauart`, `status`, `ventil`; außer bei `wp`: `normVorlauf`, `normRuecklauf`, `normRaum`; für die Berechnung außerdem die Leistung (`normleistung`, bei Gliedern auch `gliederzahl` mit `leistungJeGlied`; bei `wp` die `kennlinie` mit mindestens zwei Paaren und `kennlinieRaumtemperatur`) | Maße, `typ`, `material`, `exponent`, `notiz` |
+| `verbrauch` | `id`, `name`, `gasKwh`, `nichtFuerHeizungKwh`, `kesselNutzungsgrad`, `innentemperaturIst`, `innentemperaturSoll`, mindestens ein Monat mit `heizmonat: true` samt `gradtage` und `heiztage`; bei `holzRm` größer 0 auch `heizwertRm` und `ofenWirkungsgrad` | `holzRm` (`null` ohne Holz), `notiz` |
+
+**Erlaubte Werte** (Auswahlfelder):
+
+| Feld | Werte |
+|---|---|
+| `zonen[].art` | `erdreich`, `unbeheizt`, `nachbar` |
+| `bauteile[].art` | `aussenwand`, `dach`, `kellerdecke`, `bodenplatte`, `erdberuehrteWand`, `nachbarwand`, `innenwand`, `innendecke` |
+| `bauteile[].quelle`, `oeffnungstypen[].quelle` | `rechnung`, `stempel`, `schaetzung` |
+| `oeffnungstypen[].art` | `fenster`, `tuer` |
+| `raeume[].geschoss` | `EG`, `Keller` (weitere Geschosse gibt es derzeit nicht) |
+| `raeume[].status` | `beheizt`, `passiv`, `unbeheizt` |
+| `raumflaechen[].modus`, Öffnung `modus` | `laengeHoehe`, `flaeche` |
+| `raumflaechen[].angrenzend.art` | `aussen`, `zone`, `raum` |
+| `heizkoerper[].bauart` | `platten`, `glieder`, `handtuch`, `wp`, `sonstige` |
+| `heizkoerper[].typ` | `""`, `11`, `21`, `22`, `33`, `andere` |
+| `heizkoerper[].status` | `bleibt`, `entfaellt`, `neu`, `geplant` |
+| `heizkoerper[].material` | `""`, `stahl`, `guss`, `aluminium`, `sonstiges` |
+| `heizkoerper[].ventil` | `neu`, `alt` |
+
 ## Vorbereitet für spätere Stufen
 
 `fotos`, `markierungen` und `szenarien` sind Listen und derzeit **leer**. In Stufe 2 kommen die Fotos (verkleinert, in
