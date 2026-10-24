@@ -3,8 +3,8 @@
 // Eine neue Version (geänderte VERSION) ersetzt den alten Speicher vollständig.
 
 // --- erzeugt von tools/sw-aktualisieren.js, nicht von Hand ändern ---
-const VERSION = '25f4f58911';
-const ERSTELLT = '2026-10-24T08:48:40.900Z';
+const VERSION = '18858ee2ff';
+const ERSTELLT = '2026-10-24T09:17:36.250Z';
 const DATEIEN = [
   "./",
   "css/print.css",
@@ -35,8 +35,11 @@ const DATEIEN = [
   "js/planlayout.js",
   "js/planzeichnung.js",
   "js/schemas.js",
+  "js/schutz.js",
+  "js/szenario.js",
   "js/ui.js",
   "js/validate.js",
+  "js/vergleich.js",
   "js/views/bericht.js",
   "js/views/einstellungen.js",
   "js/views/heizkoerper.js",
@@ -44,6 +47,7 @@ const DATEIEN = [
   "js/views/plan.js",
   "js/views/raeume.js",
   "js/views/sicherung.js",
+  "js/views/szenarien.js",
   "js/views/verbrauch.js",
   "js/views/vorlauf.js",
   "manifest.webmanifest"

@@ -19,6 +19,28 @@ export const STORES = [
 
 let dbPromise = null;
 
+// --- Schreibschutz im Szenario-Betrieb ---------------------------------------------------------------
+//
+// Solange ein Szenario aktiv ist, zeigen alle Ansichten die Werte des Szenarios. Die Bestandsdaten (Ist-Zustand)
+// dürfen dann nicht geändert werden, sonst würden Szenario-Werte aus der Ansicht in den Ist-Zustand zurückgeschrieben.
+// Diese Sperre sitzt in der Datenschicht, damit keine Ansicht sie vergessen kann. Offen bleiben nur die Szenarien selbst
+// ('scenarios'), die Statusangaben ('meta') und die Plan-Positionen über speicherePlan().
+let schreibschutz = false;
+const GESCHUETZT = new Set(['settings', 'zones', 'components', 'openingTypes', 'rooms', 'surfaces', 'radiators', 'consumption', 'photos', 'markers']);
+
+export class SchreibschutzFehler extends Error {
+  constructor() {
+    super('Ein Szenario ist aktiv: Die Bestandsdaten sind schreibgeschützt. Bitte zum Ist-Zustand wechseln.');
+    this.name = 'SchreibschutzFehler';
+  }
+}
+
+export const setzeSchreibschutz = (an) => { schreibschutz = Boolean(an); };
+export const istSchreibgeschuetzt = () => schreibschutz;
+function pruefeSchreibzugriff(store) {
+  if (schreibschutz && GESCHUETZT.has(store)) throw new SchreibschutzFehler();
+}
+
 export function oeffneDb() {
   if (!dbPromise) {
     dbPromise = new Promise((erfolg, fehler) => {
@@ -51,8 +73,31 @@ async function ausfuehren(store, modus, aktion) {
 export const alle = (store) => ausfuehren(store, 'readonly', (s) => s.getAll());
 export const lade = (store, id) => ausfuehren(store, 'readonly', (s) => s.get(id));
 // Beim Speichern bekommen Öffnungen und Heizkörper, falls nötig, eine dauerhafte ID (siehe mitStabilenIds).
-export const speichere = (store, objekt) => ausfuehren(store, 'readwrite', (s) => s.put(mitStabilenIds(store, objekt, neueId)));
-export const loesche = (store, id) => ausfuehren(store, 'readwrite', (s) => s.delete(id));
+export async function speichere(store, objekt) {
+  pruefeSchreibzugriff(store);
+  return ausfuehren(store, 'readwrite', (s) => s.put(mitStabilenIds(store, objekt, neueId)));
+}
+export async function loesche(store, id) {
+  pruefeSchreibzugriff(store);
+  return ausfuehren(store, 'readwrite', (s) => s.delete(id));
+}
+
+// Plan-Position eines Raums oder einer Zone speichern (plan: { x, y } oder null). Das ist reines Layout und bleibt im
+// Szenario-Betrieb erlaubt. Gelesen wird der Datensatz des Ist-Zustands aus der Datenbank, nie ein für das Szenario
+// veränderter Datensatz aus der Ansicht, und nur das Feld "plan" wird geändert.
+export async function speicherePlan(store, id, plan) {
+  const aktuell = await lade(store, id);
+  if (!aktuell) return;
+  const neu = { ...aktuell };
+  if (plan) neu.plan = plan; else delete neu.plan;
+  await ausfuehren(store, 'readwrite', (s) => s.put(neu));
+}
+
+// Aktives Szenario (null = Ist-Zustand). Der Zustand liegt in "meta" und gehört nicht zur Sicherungsdatei.
+export async function ladeAktivesSzenarioId() {
+  return (await lade('meta', 'aktivesSzenario'))?.szenarioId ?? null;
+}
+export const speichereAktivesSzenarioId = (szenarioId) => ausfuehren('meta', 'readwrite', (s) => s.put({ id: 'aktivesSzenario', szenarioId }));
 
 export function neueId() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
@@ -98,6 +143,7 @@ export async function ladeAlles() {
 // Ersetzt alle Projektdaten in EINER Transaktion: schlägt etwas fehl, bleibt der alte Stand vollständig erhalten.
 // Die Markierung "init" bleibt erhalten, damit die Standardzone nicht wieder erscheint und der Beginn der Nutzung gilt.
 export async function ersetzeAlles(speicher, sicherung = null) {
+  if (schreibschutz) throw new SchreibschutzFehler();
   const bisher = await lade('meta', 'init');
   const db = await oeffneDb();
   await new Promise((erfolg, fehler) => {

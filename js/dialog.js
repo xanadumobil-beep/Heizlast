@@ -2,11 +2,18 @@
 
 import { el, baueFormular } from './ui.js';
 import { hatFehler, hatWarnungen } from './validate.js';
+import { istSchreibgeschuetzt } from './db.js';
+import { fordereIstZustand } from './schutz.js';
 
 // Zeigt ein Formular im Dialog. Fehler verhindern das Speichern. Bei Warnungen
 // erscheinen die Hinweise, und ein zweiter Klick ("Trotzdem speichern") speichert.
 // speichern(gelesen) bekommt die Werte der Vorgabe, überlagert mit den Eingaben.
-export function oeffneDialog({ titel, felder, werteVorgabe, validiere, speichern }) {
+// ausnahmeSchutz: nur für den Szenario-Editor, der keine Bestandsdaten schreibt.
+export function oeffneDialog({ titel, felder, werteVorgabe, validiere, speichern, ausnahmeSchutz = false }) {
+  if (istSchreibgeschuetzt() && !ausnahmeSchutz) {
+    fordereIstZustand();
+    return;
+  }
   const dialog = el('dialog', { class: 'bearbeiten' });
   let bestaetigt = false;
 

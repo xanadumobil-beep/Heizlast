@@ -29,6 +29,8 @@
   --pl-warn: #d32f2f;
   --pl-markentext: #ffffff;
   --pl-zone: #dcecec;
+  --szenario: #7a3db8;
+  --szenario-bg: #efe3fb;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -61,6 +63,8 @@
     --pl-warn: #ff6b60;
     --pl-markentext: #101010;
     --pl-zone: #243536;
+    --szenario: #c39bf0;
+    --szenario-bg: #3a2754;
   }
 }
 
@@ -468,3 +472,33 @@ details.hilfe li { margin-bottom: 6px; }
 .pruef-warnung { color: var(--warnung); font-weight: 700; }
 .pruef-fehler { color: var(--fehler); font-weight: 700; }
 .pruef-tabelle td, .pruef-tabelle th { vertical-align: top; }
+
+
+/* --- Szenarien -------------------------------------------------------------------------- */
+.kopfzeile-oben { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.szenariowahl { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--text-leise); }
+.szenariowahl select { min-height: 40px; font-size: 1rem; max-width: 60vw; }
+body.szenario-aktiv .kopfleiste { border-bottom: 4px solid var(--szenario); }
+body.szenario-aktiv .szenariowahl select { border-color: var(--szenario); font-weight: 700; }
+.szenario-streifen {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  margin: 0; padding: 10px 16px; background: var(--szenario-bg); color: var(--text);
+  border-bottom: 3px solid var(--szenario);
+}
+.szenario-streifen[hidden] { display: none; }
+.szenario-streifen p { margin: 0; flex: 1 1 320px; }
+.szenario-streifen strong { color: var(--szenario); }
+.streifen-hinweis { color: var(--warnung); font-weight: 600; }
+.schreibgeschuetzt button:disabled, .schreibgeschuetzt input:disabled, .schreibgeschuetzt select:disabled, .schreibgeschuetzt textarea:disabled { opacity: 0.45; }
+.szenarioliste { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.szenariokarte.aktiv { border-color: var(--szenario); border-width: 2px; }
+.szenariokarte h3 { margin: 0 0 4px; }
+.szenario-tabelle td.ist, .szenario-tabelle th.ist { color: var(--text-leise); }
+.szenario-tabelle input { width: 7em; min-height: 40px; }
+.szenario-tabelle td.hinweis-zeile { color: var(--warnung); font-weight: 600; }
+.szenario-abschnitt { margin: 18px 0; }
+.szenario-abschnitt h3 { margin: 0 0 6px; }
+.vergleich-tabelle td, .vergleich-tabelle th { vertical-align: top; }
+.vergleich-tabelle .zahl { white-space: nowrap; }
+.berichtwahl { display: grid; gap: 4px; margin: 10px 0; max-width: 520px; }
+.berichtwahl select { min-height: 44px; font-size: 1rem; }

@@ -27,7 +27,7 @@ sind über `.gitignore` vom Hochladen ins Repository ausgeschlossen, weil das Re
 | Feld | Bedeutung |
 |---|---|
 | `format` | immer `"heizlast-projekt"` |
-| `schemaVersion` | derzeit `1` |
+| `schemaVersion` | derzeit `2` (Version 1 ohne Szenarien bleibt lesbar, neuere Versionen werden abgelehnt) |
 | `exportiertAm` | Zeitpunkt des Exports (ISO-Format) |
 | `app` | `"Heizlast"` |
 | `daten` | alle Projektdaten, siehe unten |
@@ -204,17 +204,28 @@ als fehlerhaft markiert.
 | `heizkoerper[].material` | `""`, `stahl`, `guss`, `aluminium`, `sonstiges` |
 | `heizkoerper[].ventil` | `neu`, `alt` |
 
+## `daten.szenarien`
+
+Ein Szenario beschreibt **Abweichungen** gegenüber dem Ist-Zustand (den normalen Projektdaten). Der Ist-Zustand wird durch Szenarien
+nie verändert. Fehlende Teile ergänzt die App beim Import mit Leerwerten.
+
+| Feld | Bedeutung |
+|---|---|
+| `id`, `name`, `beschreibung`, `erstelltAm` | Kennung (Pflicht), Name, Text, Zeitpunkt (ISO) |
+| `abweichungen.bauteile` | `{ "<bauteilId>": { "name": "Flachdach", "u": { "min": 0.2, "max": 0.2 } } }` überschreibt den U-Wert |
+| `abweichungen.oeffnungstypen` | `{ "<typId>": { "name": "...", "uw": 1.0 } }` überschreibt den Uw-Wert |
+| `abweichungen.heizkoerperStatus` | `{ "<heizkoerperId>": { "name": "...", "status": "entfaellt" } }`, Status wie bei den Heizkörpern |
+| `abweichungen.neueHeizkoerper` | Liste vollständiger Heizkörper wie in `heizkoerper` (mit `id`, `raumId`, Normbedingungen oder Kennlinie), die nur in diesem Szenario existieren; zusätzlich `name` |
+| `abweichungen.raumTemperatur` | `{ "<raumId>": { "name": "...", "theta": 21 } }` überschreibt die Soll-Temperatur |
+| `abweichungen.luftwechselStandard` | `null` oder `{ "min": 0.4, "max": 0.6 }` überschreibt den Standard-Luftwechsel |
+| `abweichungen.luftwechselRaum` | `{ "<raumId>": { "name": "...", "min": 0.3, "max": 0.5 } }` überschreibt den Luftwechsel eines Raums |
+| `abweichungen.einstellungen` | `{ "zielVorlauf": 40, "spreizung": 7 }`, beide Felder optional |
+
+`name` in den Einträgen ist eine Merkhilfe: Wird das Ziel im Ist-Zustand später gelöscht, nennt die App den Namen im Hinweis. Verweist eine
+Abweichung auf etwas, das es nicht (mehr) gibt, wirkt sie nicht, und die App zeigt einen Hinweis. Die Kennung eines szenario-eigenen
+Heizkörpers darf nicht mit einem Heizkörper des Ist-Zustands übereinstimmen.
+
 ## Vorbereitet für spätere Stufen
 
-`fotos`, `markierungen` und `szenarien` sind Listen und derzeit **leer**. In Stufe 2 kommen die Fotos (verkleinert, in
-der Datei enthalten) und Markierungen hinzu, die auf Öffnungen und Heizkörper verweisen. In Stufe 3 folgen die
-Szenarien. Alte Dateien bleiben lesbar.
-
-## Hinweise für die Umwandlung einer Tabelle
-
-1. Räume zuerst, dann Bauteile, Zonen, Öffnungstypen, danach Raumflächen und Heizkörper. So sind alle Verweise bekannt.
-2. Jede Zeile bekommt eine eindeutige, dauerhafte `id`. Zum Beispiel `raum-` und ein Kürzel.
-3. Nichts schätzen, was die Tabelle nicht hergibt: lieber `null`. Die App markiert Fehlendes.
-4. Bei Heizkörpern die **Normbedingungen der jeweiligen Tabelle** eintragen (55/45/20, 75/65/20, 90/70/20 ...).
-5. Passive Räume: `status` auf `passiv` und `waermeLieferanten` mit Prozent, Summe 100.
-6. Nach dem Import zeigt die App unter „Räume“ die Gegenprobe der Gebäudesumme. Sie muss null Differenz zeigen.
+`fotos` und `markierungen` sind Listen und derzeit **leer**. In Stufe 2 kommen die Fotos (verkleinert, in der Datei enthalten) und
+Markierungen hinzu, die auf Öffnungen und Heizkörper verweisen. Alte Dateien bleiben lesbar.

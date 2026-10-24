@@ -162,7 +162,8 @@ export async function renderPlan(container) {
       cancelAnimationFrame(anfrage);
       zeichne();
       const { store, objekt } = objektZuKasten(projekt, b.raumId);
-      await db.speichere(store, objekt);
+      // Nur die Position wird geschrieben, am Datensatz des Ist-Zustands (nicht an der Kopie des Szenarios).
+      await db.speicherePlan(store, objekt.id, objekt.plan);
     } else if (b.raumId) {
       auswahl = auswahl.raum === b.raumId && !auswahl.linie ? { raum: null, symbol: null, linie: null } : { raum: b.raumId, symbol: null, linie: null };
       zeichne();
@@ -209,7 +210,7 @@ export async function renderPlan(container) {
     for (const [store, liste] of [['rooms', projekt.raeume], ['zones', projekt.zonen]]) {
       for (const eintrag of liste.filter((x) => x.plan)) {
         delete eintrag.plan;
-        await db.speichere(store, eintrag);
+        await db.speicherePlan(store, eintrag.id, null);
       }
     }
     zeichne();

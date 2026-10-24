@@ -338,3 +338,6 @@ export function validiereVerbrauch(v) {
   }
   return meldungen;
 }
+
+// Für die Szenarien: dieselben Zahlenprüfungen mit eigenen Feldnamen.
+export { zahl as pruefeZahl, bereich as pruefeBereich, fehler as fehlerMeldung, warnung as warnMeldung };

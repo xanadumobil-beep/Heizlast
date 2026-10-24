@@ -12,6 +12,8 @@ import { rechne, bewerteVorlauf } from './daten.js';
 import { raumVolumen, nettoFlaeche, flaecheAusMassen, oeffnungsGesamtflaeche } from './modell.js';
 import { datumText, inhaltsHinweise } from './io.js';
 import { baueplan, pruefZeilen } from './plan.js';
+import { baueVergleich, vergleichTabellen } from './vergleich.js';
+import { szenarioInfo } from './szenario.js';
 import {
   watt, wattBereich, wattBereichVon, mitVorzeichen, raumName, flaechenBezeichnung, angrenzendText, massText,
   meldungsTexte, berechneteBandbreite, auswerten, abweichungsText, FEHLER_TEXT, vorlaufText, hinweisText,
@@ -368,9 +370,23 @@ function hinweiseAbschnitt(ctx) {
   return bloecke;
 }
 
+// Abweichungen eines Szenarios als Tabelle mit Ist- und Szenario-Wert nebeneinander.
+function abweichungsBloecke(info) {
+  const bloecke = [];
+  if (info.beschreibung) bloecke.push(text(info.beschreibung));
+  bloecke.push(info.zeilen.length === 0
+    ? text('Keine Abweichungen: Das Szenario entspricht dem Ist-Zustand.')
+    : tabelle(['Bereich', 'Ziel', 'Ist-Zustand', 'Szenario'], info.zeilen.map((r) => [r.bereich, r.hinweis ? `${r.ziel} (Ziel fehlt im Ist-Zustand)` : r.ziel, r.ist, r.szenario]), 'llll'));
+  if (info.hinweise.length > 0) bloecke.push(box(`Abweichungen ohne Wirkung: ${info.hinweise.map((h) => h.text).join(' ')}`, 'fehler'));
+  return bloecke;
+}
+
 // --- Gesamtbericht ---------------------------------------------------------------------------
 
-export function baueBericht(projekt, jetzt = new Date()) {
+// optionen.szenario: Angaben zu einem aktiven Szenario (siehe szenarioInfo). Dann gilt der Bericht für dieses Szenario:
+// projekt enthält die angewendeten Abweichungen, der Verbrauchsabgleich entfällt, ein Abschnitt listet die Abweichungen.
+export function baueBericht(projekt, jetzt = new Date(), optionen = {}) {
+  const szenario = optionen.szenario ?? null;
   const e = projekt.einstellungen;
   const { ergebnis, hinweise, fehler } = rechne(projekt);
   const berechnet = berechneteBandbreite(ergebnis);
@@ -380,7 +396,14 @@ export function baueBericht(projekt, jetzt = new Date()) {
   const hatErgebnis = Boolean(ergebnis) && ergebnis.raeume.length > 0;
 
   const abschnitte = [
-    { titel: 'Ergebnis auf einen Blick', bloecke: uebersicht(ctx) },
+    {
+      titel: 'Ergebnis auf einen Blick',
+      bloecke: [
+        ...(szenario ? [box(`Dieser Bericht gilt für das Szenario „${szenario.name}“, nicht für den Ist-Zustand. Alle Werte enthalten die Abweichungen des Szenarios.`)] : []),
+        ...uebersicht(ctx).map((b) => (szenario && b.art === 'paare' ? { ...b, zeilen: b.zeilen.filter((r) => !r[0].startsWith('Verbrauchsabgleich')) } : b)),
+      ],
+    },
+    ...(szenario ? [{ titel: `Szenario „${szenario.name}“: Abweichungen`, bloecke: abweichungsBloecke(szenario) }] : []),
     { titel: 'Projektdaten und Einstellungen', bloecke: projektdaten(projekt) },
     { titel: 'Verfahren und Annahmen', bloecke: verfahren(projekt) },
     { titel: 'Zonen', bloecke: zonenAbschnitt(projekt) },
@@ -389,7 +412,7 @@ export function baueBericht(projekt, jetzt = new Date()) {
     ...(hatErgebnis ? [{ titel: 'Räume und Heizlast', bloecke: raeumeAbschnitt(ctx) }] : []),
     { titel: 'Heizkörper', bloecke: heizkoerperAbschnitt(projekt) },
     ...(hatErgebnis ? [{ titel: 'Vorlauftemperaturen', bloecke: vorlaufAbschnitt(ctx) }] : []),
-    { titel: 'Verbrauchsabgleich', bloecke: verbrauchAbschnitt(ctx) },
+    { titel: 'Verbrauchsabgleich', bloecke: szenario ? [text('Im Szenario-Bericht entfällt der Verbrauchsabgleich: Er vergleicht den gemessenen Verbrauch mit dem Ist-Zustand. Siehe den Bericht „Ist-Zustand“.')] : verbrauchAbschnitt(ctx) },
     { titel: 'Hinweise und Datenqualität', bloecke: hinweiseAbschnitt(ctx) },
     ...(projekt.raeume.length > 0 ? [{ titel: 'Plan und Vollständigkeit', neueSeite: true, bloecke: planAbschnitt(ctx) }] : []),
     ...(hatErgebnis ? [{ titel: 'Anlage: Raumflächen und Verluste', neueSeite: true, bloecke: flaechenAnlage(ctx) }] : []),
@@ -398,12 +421,62 @@ export function baueBericht(projekt, jetzt = new Date()) {
   const datum = datumText(jetzt);
   const name = e.projektname || 'Heizlast';
   return {
-    titel: 'Heizlastberechnung: Prüfbericht',
-    projektname: e.projektname || 'ohne Namen',
+    titel: szenario ? 'Heizlastberechnung: Prüfbericht (Szenario)' : 'Heizlastberechnung: Prüfbericht',
+    projektname: `${e.projektname || 'ohne Namen'}${szenario ? ` · Szenario: ${szenario.name}` : ''}`,
     erstelltAm: datum,
     haftungshinweis: HAFTUNGSHINWEIS,
-    seitentitel: `Heizlast-Bericht ${name} ${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`,
+    seitentitel: `Heizlast-Bericht ${name}${szenario ? ` Szenario ${szenario.name}` : ''} ${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`,
     abschnitte,
   };
 }
 
+
+
+// Bericht „Szenarienvergleich“: Kennzahlen, Räume, Verluste nach Art und die Abweichungen je Szenario.
+// ist: Projekt im Ist-Zustand, szenarien: alle Szenarien.
+export function baueVergleichsBericht(ist, szenarien, jetzt = new Date()) {
+  const e = ist.einstellungen;
+  const vergleich = baueVergleich(ist, szenarien);
+  const t = vergleichTabellen(vergleich);
+  const tab = (x) => tabelle(x.kopf, x.zeilen, x.ausrichtung, Boolean(x.summenzeile));
+  const hinweise = vergleich.spalten.filter((sp) => sp.szenarioHinweise.length > 0);
+
+  const abschnitte = [
+    {
+      titel: 'Szenarienvergleich',
+      bloecke: [
+        text('Der Ist-Zustand und jedes Szenario nebeneinander. Die Gebäudeheizlast ist eine Bandbreite von der günstigen bis zur ungünstigen Rechnung. '
+          + 'Die Minderung bezieht sich auf den Mittelwert, die Vorlauftemperatur des Hauses auf die ungünstige Heizlast.'),
+        ...(szenarien.length === 0 ? [text('Es gibt noch keine Szenarien.')] : [
+          tab(t.kennzahlen),
+          ...(hinweise.length > 0 ? [box(`Abweichungen ohne Wirkung: ${hinweise.map((sp) => `${sp.name}: ${sp.szenarioHinweise.map((h) => h.text).join(' ')}`).join(' ')}`, 'fehler')] : []),
+        ]),
+      ],
+    },
+    ...(szenarien.length > 0 ? [
+      { titel: 'Räume im Vergleich', bloecke: [text('Heizlast als Mittelwert und nötige Vorlauftemperatur (ungünstige Heizlast) je Raum.'), tab(t.raeume)] },
+      {
+        titel: 'Woher kommt die Änderung? Verluste nach Art',
+        bloecke: [
+          text('Mittelwert aus günstiger und ungünstiger Rechnung. In Klammern die Änderung gegenüber dem Ist-Zustand. Raum-zu-Raum-Ströme bleiben im Haus und sind nicht enthalten, die Summe entspricht der Gebäudeheizlast.'),
+          tab(t.transmission),
+        ],
+      },
+      {
+        titel: 'Abweichungen je Szenario',
+        neueSeite: true,
+        bloecke: szenarien.flatMap((sz) => [zwischentitel(sz.name), ...abweichungsBloecke(szenarioInfo(ist, sz))]),
+      },
+    ] : []),
+  ].map((a, i) => ({ ...a, titel: `${i + 1} ${a.titel}` }));
+
+  const name = e.projektname || 'Heizlast';
+  return {
+    titel: 'Heizlastberechnung: Szenarienvergleich',
+    projektname: e.projektname || 'ohne Namen',
+    erstelltAm: datumText(jetzt),
+    haftungshinweis: HAFTUNGSHINWEIS,
+    seitentitel: `Heizlast-Szenarienvergleich ${name} ${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`,
+    abschnitte,
+  };
+}

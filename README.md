@@ -20,6 +20,11 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
   gestrichelte Kästen im gewählten Geschoss. Antippen eines Raums zeigt seine Linien zu den Randsymbolen und alle seine Flächen
   mit Verlust. Kästen lassen sich per Finger verschieben, die Positionen stehen in der Sicherungsdatei. Auffälligkeiten und
   eine Vollständigkeitsprüfung je Raum stehen direkt im Plan und im Bericht.
+- **Szenarien:** Der Ist-Zustand sind die normalen Daten und wird nie verändert. Ein Szenario beschreibt Abweichungen (U-Werte,
+  Fenster-Uw, Heizkörper-Status und zusätzliche Heizkörper, Soll-Temperaturen, Luftwechsel, Ziel-Vorlauf und Spreizung). Oben wählst
+  du die Ansicht: Ist-Zustand oder ein Szenario. Bei aktivem Szenario zeigen Räume, Plan, Vorlauf und Bericht dessen Werte, und die
+  Bestandsdaten sind schreibgeschützt. Der Tab „Szenarien“ vergleicht alle Szenarien mit dem Ist-Zustand (Heizlast, Minderung,
+  Vorlauftemperatur, Verluste nach Bauteilart). Der Bericht lässt sich für den Ist-Zustand, ein Szenario oder den Vergleich drucken.
 - **Heizkörper und Vorlauftemperatur:** Leistung nach Norm-Bedingungen, Wärmepumpen-Kennlinien, nötige Vorlauftemperatur
   je Haus und je Raum, bestimmender Raum.
 - **Verbrauchsabgleich:** Gasverbrauch und Holz in eine Heizlast umgerechnet, mit zwei Innentemperaturen
@@ -138,5 +143,4 @@ tools/            Hilfsskripte für den Service Worker
 examples/         erfundenes Beispielhaus und Formatbeschreibung
 ```
 
-Geplant für spätere Stufen (im Datenmodell und im Sicherungsformat bereits vorgesehen): Fotos je Raum mit
-Markierungen, Szenarien mit geänderten U-Werten und Heizkörper-Status.
+Geplant für Stufe 2 (im Datenmodell und im Sicherungsformat bereits vorgesehen): Fotos je Raum mit Markierungen.

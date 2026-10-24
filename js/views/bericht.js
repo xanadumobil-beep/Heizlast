@@ -2,8 +2,9 @@
 // Den Inhalt baut js/bericht.js, das Druck-Layout steht in css/print.css.
 
 import { el, ersetzeKinder } from '../ui.js';
-import { ladeProjekt } from '../daten.js';
-import { baueBericht } from '../bericht.js';
+import { ladeIstProjekt, ladeSzenarien, ladeAktivesSzenario } from '../daten.js';
+import { baueBericht, baueVergleichsBericht } from '../bericht.js';
+import { wendeSzenarioAn, szenarioInfo } from '../szenario.js';
 import { geometrie } from '../planlayout.js';
 import { zeichnePlan, legende } from '../planzeichnung.js';
 
@@ -64,18 +65,47 @@ function drucken(titel) {
   window.print();
 }
 
+// Inhalt des Berichts: 'ist', 'szenario:<id>' oder 'vergleich'.
+function baueGewaehlt(wahl, ist, szenarien, jetzt) {
+  if (wahl === 'vergleich') return baueVergleichsBericht(ist, szenarien, jetzt);
+  if (wahl.startsWith('szenario:')) {
+    const sz = szenarien.find((x) => `szenario:${x.id}` === wahl);
+    if (sz) return baueBericht(wendeSzenarioAn(ist, sz).projekt, jetzt, { szenario: szenarioInfo(ist, sz) });
+  }
+  return baueBericht(ist, jetzt);
+}
+
 export async function renderBericht(container) {
-  const projekt = await ladeProjekt();
-  const bericht = baueBericht(projekt, new Date());
+  const [ist, szenarien, aktiv] = await Promise.all([ladeIstProjekt(), ladeSzenarien(), ladeAktivesSzenario()]);
+  const jetzt = new Date();
+  let wahl = aktiv ? `szenario:${aktiv.id}` : 'ist';
+  const vorschau = el('div', {});
+
+  const optionen = [
+    { wert: 'ist', text: 'Ist-Zustand' },
+    ...szenarien.map((s) => ({ wert: `szenario:${s.id}`, text: `Szenario: ${s.name}` })),
+    ...(szenarien.length > 0 ? [{ wert: 'vergleich', text: 'Szenarienvergleich (alle Szenarien)' }] : []),
+  ];
+  const auswahlFeld = el('select', { 'aria-label': 'Inhalt des Berichts' }, optionen.map((o) => el('option', { value: o.wert }, o.text)));
+  auswahlFeld.value = wahl;
+
+  let bericht = null;
+  const zeige = () => {
+    bericht = baueGewaehlt(wahl, ist, szenarien, jetzt);
+    ersetzeKinder(vorschau, berichtElement(bericht));
+  };
+  auswahlFeld.addEventListener('change', () => { wahl = auswahlFeld.value; zeige(); });
+
   ersetzeKinder(
     container,
     el(
       'div', { class: 'keinDruck' },
-      el('div', { class: 'kopf' }, el('h2', {}, 'Bericht'), el('button', { type: 'button', class: 'primaer', onClick: () => drucken(bericht.seitentitel) }, 'Drucken / als PDF sichern')),
+      el('div', { class: 'kopf' }, el('h2', {}, 'Bericht'), el('button', { type: 'button', class: 'primaer', 'data-lesen': true, onClick: () => drucken(bericht.seitentitel) }, 'Drucken / als PDF sichern')),
+      el('label', { class: 'berichtwahl' }, el('span', { class: 'klein' }, 'Inhalt des Berichts'), auswahlFeld),
       el(
         'p', { class: 'beschreibung' },
         'So sieht der Ausdruck aus. Er enthält Projektdaten, Bauteilkatalog, Räume mit Heizlast, Heizkörper mit Vorlauftemperaturen, '
-        + 'die Gebäudeheizlast als Bandbreite, den Verbrauchsabgleich und alle Annahmen.',
+        + 'die Gebäudeheizlast als Bandbreite, den Verbrauchsabgleich und alle Annahmen. Gewählt wird der Ist-Zustand, ein Szenario oder der Szenarienvergleich.',
       ),
       el(
         'details', { class: 'karte hilfe' },
@@ -90,6 +120,7 @@ export async function renderBericht(container) {
         ),
       ),
     ),
-    berichtElement(bericht),
+    vorschau,
   );
+  zeige();
 }

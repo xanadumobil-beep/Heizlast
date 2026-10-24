@@ -3,20 +3,21 @@
 // beschrieben in examples/format-beschreibung.md.
 //
 // Aufbau:
-//   { format: 'heizlast-projekt', schemaVersion: 1, exportiertAm: ISO-Zeit, app: 'Heizlast',
+//   { format: 'heizlast-projekt', schemaVersion: 2, exportiertAm: ISO-Zeit, app: 'Heizlast',
 //     daten: { einstellungen, zonen, bauteile, oeffnungstypen, raeume, raumflaechen, heizkoerper, verbrauch,
 //              fotos, markierungen, szenarien } }
-// Öffnungen stecken in den Raumflächen. Fotos, Markierungen und Szenarien sind für die Stufen 2 und 3 vorgesehen
-// und derzeit leer.
+// Öffnungen stecken in den Raumflächen. Fotos und Markierungen sind für Stufe 2 vorgesehen und derzeit leer.
+// Version 2 (Stufe 3) enthält Szenarien. Dateien der Version 1 bleiben lesbar (sie haben keine Szenarien).
 
 import { standardEinstellungen, ZONENARTEN, BAUTEILARTEN, OEFFNUNGSARTEN, QUELLEN, STATI, GESCHOSSE, BAUARTEN_HK, HK_STATI, VENTILE, werte } from './schemas.js';
 import { doppelteIds, migriereVerbrauch, kennlinieZuText, mitStabilenIds } from './modell.js';
+import { normalisiereSzenario, validiereSzenario, wendeSzenarioAn } from './szenario.js';
 import {
   validiereZone, validiereBauteil, validiereOeffnungstyp, validiereRaumEingabe, validiereHeizkoerper, validiereVerbrauch,
 } from './validate.js';
 
 export const FORMAT_KENNUNG = 'heizlast-projekt';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const SICHERUNG_FRIST_TAGE = 14;
 
 // Interner Speicher (IndexedDB) und Schlüssel in der Datei. Die Einstellungen sind ein einzelnes Objekt.
@@ -127,6 +128,11 @@ function pruefeVerweise(d) {
       if (!raeume.has(l.raumId)) hinweise.push(`Raum „${r.name}“: Ein Wärmelieferant ist in der Datei nicht vorhanden.`);
     }
   }
+  // Szenarien: Abweichungen, deren Ziel in der Datei fehlt, wirken nicht.
+  const projekt = projektAusSpeicher(d);
+  for (const sz of d.scenarios ?? []) {
+    for (const h of wendeSzenarioAn(projekt, sz).hinweise) hinweise.push(`Szenario „${sz.name}“: ${h.text}`);
+  }
   return hinweise;
 }
 
@@ -146,6 +152,7 @@ export function inhaltsHinweise(d) {
     sammle(`Heizkörper in „${raum?.name ?? '?'}“`, h.id, validiereHeizkoerper({ ...h, kennlinieText: kennlinieZuText(h.kennlinie) }, optionen));
   }
   for (const v of d.consumption) sammle('Verbrauchsabgleich', v.name, validiereVerbrauch(v));
+  for (const sz of d.scenarios ?? []) sammle('Szenario', sz.name, validiereSzenario(sz));
   return meldungen;
 }
 
@@ -181,6 +188,7 @@ export function pruefeImport(text) {
   const speicher = { settings: [vollstaendigeEinstellungen(datei.daten.einstellungen)] };
   for (const [store, schluessel] of Object.entries(DATEI_SCHLUESSEL)) speicher[store] = datei.daten[schluessel] ?? [];
   speicher.consumption = speicher.consumption.map(migriereVerbrauch);
+  speicher.scenarios = speicher.scenarios.map(normalisiereSzenario);
   // IDs ergänzen, wo es erlaubt ist (Öffnungen ohne ID), damit sie danach dauerhaft sind.
   speicher.surfaces = speicher.surfaces.map((f) => mitStabilenIds('surfaces', f, () => `oeffnung-${Math.random().toString(36).slice(2, 12)}`));
 
@@ -211,6 +219,7 @@ export function zusammenfassung(speicher) {
     oeffnungen: (speicher.surfaces ?? []).reduce((s, f) => s + (f.oeffnungen ?? []).length, 0),
     heizkoerper: anzahl('radiators'),
     verbrauch: anzahl('consumption'),
+    szenarien: anzahl('scenarios'),
   };
 }
 
@@ -223,6 +232,7 @@ export const ZUSAMMENFASSUNG_NAMEN = {
   oeffnungen: 'Öffnungen',
   heizkoerper: 'Heizkörper',
   verbrauch: 'Verbrauchsabgleiche',
+  szenarien: 'Szenarien',
 };
 
 // --- Sicherungsstatus --------------------------------------------------------------------

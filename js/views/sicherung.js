@@ -178,7 +178,7 @@ export async function renderSicherung(container) {
     ),
     statusZeile,
     el(
-      'section', { class: 'karte abstand' },
+      'section', { class: 'karte abstand', 'data-lesen': true },
       el('h3', {}, 'Sicherung exportieren'),
       el('p', { class: 'zeile' }, `Jetzt in der App: ${aktuell.raeume} Räume, ${aktuell.raumflaechen} Raumflächen, ${aktuell.heizkoerper} Heizkörper, ${aktuell.verbrauch} Verbrauchsabgleiche.`),
       el('div', { class: 'knopfzeile' }, el('button', { type: 'button', class: 'primaer', onClick: sichere }, 'Sicherungsdatei exportieren')),

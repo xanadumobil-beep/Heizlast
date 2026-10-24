@@ -121,7 +121,8 @@ export async function renderVorlauf(container) {
     regler.value = String(ziel);
     zeichne();
   };
-  const speichereZiel = () => db.speichere('settings', { ...projekt.einstellungen, zielVorlauf: ziel });
+  // Im Szenario-Betrieb bleibt die gewählte Temperatur eine Probe: Das Szenario legt sie im Szenario-Editor fest.
+  const speichereZiel = () => (projekt.szenario ? null : db.speichere('settings', { ...projekt.einstellungen, zielVorlauf: ziel }));
 
   regler.addEventListener('input', () => setze(Number(regler.value)));
   regler.addEventListener('change', speichereZiel);
@@ -142,6 +143,7 @@ export async function renderVorlauf(container) {
         el('button', { type: 'button', 'aria-label': 'Ein Grad mehr', onClick: () => { setze(ziel + 1); speichereZiel(); } }, '+'),
         anzeige,
       ),
+      projekt.szenario ? el('p', { class: 'hinweis' }, `Szenario „${projekt.szenario.name}“: Die Regler-Stellung wird nicht gespeichert. Die Ziel-Vorlauftemperatur des Szenarios stellst du im Szenario-Editor ein.`) : null,
       el('p', { class: 'hinweis' }, `Rücklauf ${spreizung > 0 ? `${ziel - spreizung} °C` : `${ziel} °C`} bei ${zahlZuText(spreizung)} K Spreizung. Die Tabelle zeigt Leistung, Deckung und Über- oder Unterdeckung bei dieser Temperatur.`),
     ),
     bereich,

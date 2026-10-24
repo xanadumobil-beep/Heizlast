@@ -12,7 +12,7 @@ html, body {
 }
 
 /* Nur der Bericht wird gedruckt. */
-.kopfleiste, .banner, .keinDruck, nav, dialog, button { display: none !important; }
+.kopfleiste, .szenario-streifen, .banner, .keinDruck, nav, dialog, button { display: none !important; }
 main { max-width: none; margin: 0; padding: 0; }
 
 .bericht {

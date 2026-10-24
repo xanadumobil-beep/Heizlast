@@ -13,7 +13,7 @@ function groesse(bytes) {
 }
 
 async function baueSpeicherBlock() {
-  const block = el('section', { class: 'karte speicher' });
+  const block = el('section', { class: 'karte speicher', 'data-lesen': true });
   const fuelle = async () => {
     const status = await speicherStatus();
     let text;
@@ -39,7 +39,7 @@ async function baueSpeicherBlock() {
 
 // Zeigt, welche Version der App auf dem Gerät liegt und was online verfügbar ist.
 async function baueVersionBlock() {
-  const block = el('section', { class: 'karte' });
+  const block = el('section', { class: 'karte', 'data-lesen': true });
   const meldung = el('p', { class: 'zeile', 'aria-live': 'polite' });
   const fuelle = async () => {
     const installiert = await installierteVersion().catch(() => null);
