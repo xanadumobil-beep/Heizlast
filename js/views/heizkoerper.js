@@ -56,7 +56,7 @@ function karte(projekt, raum, h, neuLaden) {
         type: 'button', onClick: () => bearbeiteHeizkoerper(raum, { ...h, id: undefined }, neuLaden),
       }, 'Kopieren'),
       el('button', {
-        type: 'button', class: 'gefahr',
+        type: 'button', class: 'gefahr loeschen',
         onClick: async () => {
           if (!confirm(`Diesen Heizkörper aus „${raum.name}“ löschen?`)) return;
           await db.loesche('radiators', h.id);

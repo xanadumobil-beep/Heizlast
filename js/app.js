@@ -7,7 +7,7 @@ import { fordereIstZustand, macheSchreibgeschuetzt } from './schutz.js';
 import { renderSzenarien } from './views/szenarien.js';
 import { el } from './ui.js';
 import { fordereDauerhaftenSpeicherAn } from './persist.js';
-import { renderEinstellungen } from './views/einstellungen.js';
+import { renderRechenannahmen, renderApp } from './views/einstellungen.js';
 import { renderKatalog, KATALOGE } from './views/katalog.js';
 import { renderRaeume, renderRaum } from './views/raeume.js';
 import { renderVorlauf } from './views/vorlauf.js';
@@ -18,37 +18,43 @@ import { renderPlan } from './views/plan.js';
 import { renderErgebnis } from './views/ergebnis.js';
 import { renderFoto } from './views/fotos.js';
 import { aktualisiereBanner } from './banner.js';
+import { BEREICHE, SEITEN, seitenVon, merkeSeite, zielSeite, seiteAusLink } from './navigation.js';
 
-// render(container, neuLaden, parameter, extra): parameter ist der Teil nach dem Schrägstrich im Link.
-const TABS = [
-  { id: 'ergebnis', titel: 'Ergebnis', render: (c, neu) => renderErgebnis(c, neu) },
-  { id: 'raeume', titel: 'Räume', render: (c, neu, id) => (id ? renderRaum(c, id, neu) : renderRaeume(c, neu)) },
-  { id: 'plan', titel: 'Plan', render: (c) => renderPlan(c) },
-  { id: 'vorlauf', titel: 'Vorlauf', render: (c) => renderVorlauf(c) },
-  { id: 'verbrauch', titel: 'Verbrauch', render: (c, neu, id) => (id ? renderVerbrauch(c, id, neu) : renderVerbrauchListe(c, neu)) },
-  { id: 'szenarien', titel: 'Szenarien', render: (c, neu, id) => renderSzenarien(c, id, neu) },
-  { id: 'bericht', titel: 'Bericht', render: (c) => renderBericht(c) },
-  { id: 'bauteile', titel: 'Bauteile', render: (c, neu) => renderKatalog(c, KATALOGE.bauteile, neu) },
-  { id: 'oeffnungen', titel: 'Öffnungen', render: (c, neu) => renderKatalog(c, KATALOGE.oeffnungen, neu) },
-  { id: 'zonen', titel: 'Zonen', render: (c, neu) => renderKatalog(c, KATALOGE.zonen, neu) },
-  { id: 'sicherung', titel: 'Sicherung', render: (c, neu) => renderSicherung(c, neu) },
-  { id: 'einstellungen', titel: 'Einstellungen', render: (c) => renderEinstellungen(c) },
-  // Vollbild eines Fotos: #foto/<Foto>/<Markierung>. Gehört zu „Räume“ und steht nicht in der Navigation.
-  { id: 'foto', titel: 'Foto', versteckt: true, nav: 'raeume', render: (c, neu, id, markierung) => renderFoto(c, id, markierung) },
-];
+// Darstellung je Seite. render(container, neuLaden, parameter, extra): parameter ist der Teil nach dem Schrägstrich im Link.
+// Aufbau von Hauptband und Unterreitern: js/navigation.js.
+const RENDER = {
+  ergebnis: (c, neu) => renderErgebnis(c, neu),
+  raeume: (c, neu, id) => (id ? renderRaum(c, id, neu) : renderRaeume(c, neu)),
+  plan: (c) => renderPlan(c),
+  vorlauf: (c) => renderVorlauf(c),
+  szenarien: (c, neu, id) => renderSzenarien(c, id, neu),
+  verbrauch: (c, neu, id) => (id ? renderVerbrauch(c, id, neu) : renderVerbrauchListe(c, neu)),
+  bericht: (c) => renderBericht(c),
+  bauteile: (c, neu) => renderKatalog(c, KATALOGE.bauteile, neu),
+  oeffnungen: (c, neu) => renderKatalog(c, KATALOGE.oeffnungen, neu),
+  zonen: (c, neu) => renderKatalog(c, KATALOGE.zonen, neu),
+  rechenannahmen: (c) => renderRechenannahmen(c),
+  sicherung: (c, neu) => renderSicherung(c, neu),
+  app: (c) => renderApp(c),
+  foto: (c, neu, id, markierung) => renderFoto(c, id, markierung),
+};
+const TABS = SEITEN.map((s) => ({ ...s, render: RENDER[s.id] }));
 
 // Ansichten, in denen die Bestandsdaten bearbeitet werden. Im Szenario-Betrieb sind sie schreibgeschützt.
-const SCHREIBGESCHUETZTE_TABS = new Set(['raeume', 'verbrauch', 'bauteile', 'oeffnungen', 'zonen', 'einstellungen', 'sicherung']);
+const SCHREIBGESCHUETZTE_TABS = new Set(['raeume', 'verbrauch', 'bauteile', 'oeffnungen', 'zonen', 'rechenannahmen', 'sicherung']);
+
+// Zuletzt geöffnete Seiten merkt sich der Browser nur als Bequemlichkeit.
+const merkspeicher = (() => { try { return globalThis.localStorage; } catch { return null; } })();
 
 const inhalt = document.getElementById('inhalt');
 const navigation = document.getElementById('navigation');
+const unterreiter = document.getElementById('unterreiter');
 let zeichnung = 0;
 
-// Links: #ergebnis, #raeume, #raum/<id>, #vorlauf, #verbrauch, #verbrauch/<id|neu>, #bericht, #bauteile, #oeffnungen, #zonen, #sicherung, #einstellungen
+// Links: #ergebnis, #raeume, #raum/<id>, #plan, #vorlauf, #szenarien, #verbrauch, #verbrauch/<id|neu>, #bericht, #bauteile, #oeffnungen, #zonen, #rechenannahmen, #sicherung, #app
 function aktuelleRoute() {
-  const [erster, parameter, extra] = location.hash.slice(1).split('/');
-  const tabId = erster === 'raum' ? 'raeume' : erster;
-  return { tab: TABS.find((t) => t.id === tabId) ?? TABS[0], parameter, extra };
+  const { seite, parameter, extra } = seiteAusLink(location.hash, merkspeicher);
+  return { tab: TABS.find((t) => t.id === seite.id), parameter, extra };
 }
 
 // Szenario-Auswahl oben und farbiger Streifen, solange ein Szenario aktiv ist.
@@ -88,9 +94,8 @@ async function aktualisiereSzenarioLeiste() {
 async function zeigeTab() {
   const { tab, parameter, extra } = aktuelleRoute();
   const aktivesSzenario = await aktualisiereSzenarioLeiste();
-  for (const link of navigation.querySelectorAll('a')) {
-    link.toggleAttribute('aria-current', link.dataset.tab === (tab.nav ?? tab.id));
-  }
+  merkeSeite(merkspeicher, tab);
+  baueNavigation(tab);
   aktualisiereBanner();
   const lauf = ++zeichnung;
   const neuerInhalt = el('div');
@@ -99,8 +104,22 @@ async function zeigeTab() {
   if (lauf === zeichnung) inhalt.replaceChildren(neuerInhalt);
 }
 
-function baueNavigation() {
-  navigation.replaceChildren(...TABS.filter((t) => !t.versteckt).map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id }, t.titel)));
+// Hauptband und Unterreiter. Der Hauptpunkt führt zur zuletzt dort geöffneten Seite, der Unterreiter zeigt die Seiten des gewählten Bereichs.
+function baueNavigation(aktuell) {
+  navigation.replaceChildren(...BEREICHE.map((b) => el(
+    'a', {
+      href: `#${zielSeite(merkspeicher, b.id)}`, 'data-bereich': b.id, 'aria-label': b.beschriftung ?? b.titel, title: b.beschriftung ?? b.titel,
+      'aria-current': b.id === aktuell.bereich ? 'page' : undefined,
+    },
+    el('span', { class: 'nav-symbol', 'aria-hidden': 'true' }, b.symbol),
+    el('span', { class: 'nav-lang', 'aria-hidden': 'true' }, b.titel),
+    el('span', { class: 'nav-kurz', 'aria-hidden': 'true' }, b.kurz),
+  )));
+  const seiten = seitenVon(aktuell.bereich);
+  unterreiter.hidden = seiten.length < 2;
+  unterreiter.replaceChildren(...(seiten.length < 2 ? [] : seiten.map((t) => el(
+    'a', { href: `#${t.id}`, 'data-tab': t.id, 'aria-current': t.id === (aktuell.nav ?? aktuell.id) ? 'page' : undefined }, t.titel,
+  ))));
 }
 
 async function start() {
@@ -115,7 +134,6 @@ async function start() {
     return;
   }
   fordereDauerhaftenSpeicherAn();
-  baueNavigation();
   document.getElementById('szenarioWahl').addEventListener('change', (e) => setzeAktivesSzenario(e.target.value || null));
   window.addEventListener('szenario-geaendert', zeigeTab);
   // Sicherheitsnetz: ein Schreibversuch auf Bestandsdaten im Szenario-Betrieb fragt nach dem Wechsel zum Ist-Zustand.

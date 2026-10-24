@@ -45,6 +45,15 @@ zum Beispiel für Förderanträge. Das steht auch in jedem Bericht.
 - **Sicherung:** Export und Import als JSON-Datei.
 - **Offline:** nach dem ersten Öffnen läuft die App ohne Internet.
 
+## Menü
+
+Das Hauptband hat acht Punkte, die auf dem iPad im Hoch- und Querformat ohne Scrollen passen (auf dem iPhone mit Symbol und kurzem Text):
+**Ergebnis**, **Gebäude** (Unterreiter Räume, Plan), **Heizkörper** (Heizkörper & Vorlauf), **Szenarien**, **Abgleich** (Verbrauchsabgleich),
+**Bericht**, **Grundlagen** (Unterreiter Bauteile, Öffnungen, Zonen, Rechenannahmen) und **⚙** (Unterreiter Sicherung, App). Der Unterreiter erscheint
+als zweite Leiste unter dem Hauptband. Die App merkt sich den zuletzt geöffneten Bereich und je Bereich die zuletzt gewählte Seite.
+Die Rechenannahmen enthalten Projektname, Normaußentemperatur, Luftwechsel, ΔU_WB, f_g, Aufheizzuschlag, Spreizung, Heizkörperexponent, Ziel-Vorlauf und Sperrzeit.
+Unter ⚙ → App stehen Version und Updates, App-Speicher und dauerhafter Speicher.
+
 ## 1. App im Netz bereitstellen (GitHub Pages)
 
 Die Dateien dieses Repositorys sind die fertige App. Es gibt keinen Build-Schritt. GitHub kann sie direkt ausliefern:
@@ -89,7 +98,7 @@ Das hat zwei Folgen:
 
 Deshalb gibt es die Sicherungsdatei:
 
-1. Tab **Sicherung** öffnen, **„Sicherungsdatei exportieren“** tippen.
+1. ⚙ → **Sicherung** öffnen, **„Sicherungsdatei exportieren“** tippen.
 2. Im Teilen-Menü **„In Dateien sichern“** wählen, am besten in iCloud Drive.
 3. Die App erinnert dich mit einem Banner, wenn die letzte Sicherung länger als 14 Tage zurückliegt.
 
@@ -97,17 +106,17 @@ Deshalb gibt es die Sicherungsdatei:
 den meisten Speicher. Beim Import einer Datei ohne Fotos fragt die App, ob die vorhandenen Fotos, Markierungen und Baupläne behalten werden sollen.
 Fotos und Baupläne gehören nicht in das öffentliche Repository.
 
-**Wiederherstellen:** Tab Sicherung, **„Sicherungsdatei wählen …“**, Datei auswählen, Vorschau prüfen,
+**Wiederherstellen:** ⚙ → Sicherung, **„Sicherungsdatei wählen …“**, Datei auswählen, Vorschau prüfen,
 **„Daten ersetzen“**. Der Import ersetzt alle Daten in der App und wird entweder vollständig oder gar nicht ausgeführt.
 
 Tipp: Lädt Safari eine Datei als `….json.txt` herunter, lässt sie sich trotzdem importieren.
 
-In den **Einstellungen** zeigt die App, ob der Browser dauerhaften Speicher gewährt hat. Auch dann gilt: Die
+Unter ⚙ → **App** zeigt die App, ob der Browser dauerhaften Speicher gewährt hat. Auch dann gilt: Die
 Sicherungsdatei ist die einzige echte Absicherung.
 
 ## 4. Bericht als PDF
 
-Tab **Bericht**, **„Drucken / als PDF sichern“**. Im iPad-Druckdialog mit zwei Fingern auf die Vorschau aufziehen,
+Bereich **Bericht**, **„Drucken / als PDF sichern“**. Im iPad-Druckdialog mit zwei Fingern auf die Vorschau aufziehen,
 dann **Teilen → In Dateien sichern**. Kopf- und Fußzeile sowie den Dateinamen setzt iOS selbst.
 
 ## 5. Datenschutz und Repository
@@ -131,6 +140,7 @@ python3 -m http.server 8000     # dann http://localhost:8000
 
 ```
 npm test                         # in Node
+npm run e2e                      # Browser-Test der Navigation (Playwright; App muss unter localhost:8780 laufen)
 ```
 
 oder im Browser `tests/tests.html` öffnen.
@@ -153,7 +163,8 @@ css/              style.css, print.css (A4-Druck)
 js/plan.js, planlayout.js, planzeichnung.js   Plan: Modell und Prüfungen, Geometrie, SVG
 js/engine/        Rechenkern (reine Funktionen, ohne Browser): Heizlast, Heizkörper, Vorlauf, Verbrauch, Format
 js/               Datenmodell, Validierung, IndexedDB, Import/Export, Bericht
-js/views/         Ansichten (Räume, Vorlauf, Verbrauch, Bericht, Kataloge, Sicherung, Einstellungen)
+js/views/         Ansichten (Ergebnis, Räume, Plan, Vorlauf, Verbrauch, Bericht, Kataloge, Sicherung, Rechenannahmen und App)
+js/navigation.js  Aufbau von Hauptband und Unterreitern (rein, getestet)
 tests/            Tests mit eigenem kleinen Runner
 tools/            Hilfsskripte für den Service Worker
 examples/         erfundenes Beispielhaus und Formatbeschreibung

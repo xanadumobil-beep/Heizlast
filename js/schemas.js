@@ -78,7 +78,7 @@ export function standardZonen() {
 }
 
 export const EINSTELLUNGEN_FELDER = [
-  { key: 'projektname', label: 'Projektname', typ: 'text', hinweis: 'Optional, erscheint im Bericht.' },
+  { key: 'projektname', label: 'Projektname', typ: 'text', hinweis: 'Optional, erscheint im Bericht. Beeinflusst keine Rechnung.' },
   {
     key: 'thetaAussen', label: 'Normaußentemperatur', typ: 'zahl', einheit: '°C',
     hinweis: 'Gilt für beide Rechnungen (günstig und ungünstig) unverändert.',
@@ -99,6 +99,14 @@ export const EINSTELLUNGEN_FELDER = [
   { key: 'aufheizzuschlag.wProM2', label: 'Aufheizzuschlag', typ: 'zahl', einheit: 'W/m²', hinweis: 'Bezogen auf die Raumfläche.' },
   { key: 'spreizung', label: 'Spreizung Vor-/Rücklauf', typ: 'zahl', einheit: 'K' },
   { key: 'heizkoerperExponent', label: 'Heizkörperexponent n (Standard)', typ: 'zahl', hinweis: 'Gilt für Heizkörper ohne eigenen Wert.' },
+  {
+    key: 'zielVorlauf', label: 'Ziel-Vorlauftemperatur', typ: 'zahl', einheit: '°C',
+    hinweis: 'Vorlauftemperatur, bei der die Heizkörper bewertet werden. Lässt sich auch im Bereich Heizkörper & Vorlauf einstellen.',
+  },
+  {
+    key: 'waermepumpe.sperrstunden', label: 'Sperrzeit des Netzbetreibers', typ: 'zahl', einheit: 'h pro Tag',
+    hinweis: 'Optional, nur für den Zuschlag bei der benötigten Wärmepumpenleistung im Ergebnis. Ohne Eingabe gibt es keinen Zuschlag.',
+  },
 ];
 
 export const ZONEN_FELDER = [
@@ -189,7 +197,7 @@ export function raumFelder(lieferantenKandidaten) {
     },
     {
       key: 'luftwechsel', label: 'Luftwechsel (optional)', typ: 'bereich', optional: true, einheit: '1/h',
-      hinweis: 'Leer lassen: Standard aus den Einstellungen. Ein Raumwert überschreibt den Standard.',
+      hinweis: 'Leer lassen: Standard aus den Rechenannahmen. Ein Raumwert überschreibt den Standard.',
     },
     ...(lieferantenKandidaten.length > 0
       ? [
@@ -379,7 +387,7 @@ export function heizkoerperFelder() {
     { key: 'normRaum', label: 'Normbedingung: Raumtemperatur', typ: 'zahl', einheit: '°C', sichtbarWenn: keinWp },
     {
       key: 'exponent', label: 'Heizkörperexponent n (optional)', typ: 'zahl', sichtbarWenn: keinWp,
-      hinweis: 'Leer lassen: Standard aus den Einstellungen.',
+      hinweis: 'Leer lassen: Standard aus den Rechenannahmen.',
     },
     {
       key: 'kennlinieText', label: 'Kennlinie aus dem Datenblatt', typ: 'notiz', sichtbarWenn: { feld: 'bauart', in: ['wp'] },

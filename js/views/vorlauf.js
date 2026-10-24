@@ -92,7 +92,7 @@ export async function renderVorlauf(container) {
   const projekt = await ladeProjekt();
   const { ergebnis, fehler } = rechne(projekt);
   if (fehler || !ergebnis) {
-    ersetzeKinder(container, el('h2', {}, 'Vorlauf'), el('p', { class: 'meldung fehler' }, `Rechenfehler: ${fehler ?? 'kein Ergebnis'}`));
+    ersetzeKinder(container, el('h2', {}, 'Heizkörper & Vorlauf'), el('p', { class: 'meldung fehler' }, `Rechenfehler: ${fehler ?? 'kein Ergebnis'}`));
     return;
   }
 
@@ -130,7 +130,7 @@ export async function renderVorlauf(container) {
   const erste = bewerteVorlauf(projekt, ergebnis, ziel);
   ersetzeKinder(
     container,
-    el('div', { class: 'kopf' }, el('h2', {}, 'Vorlauf')),
+    el('div', { class: 'kopf' }, el('h2', {}, 'Heizkörper & Vorlauf')),
     el('p', { class: 'beschreibung' }, 'Welche Vorlauftemperatur braucht jeder Raum, und wie gut deckt eine gewählte Vorlauftemperatur die Heizlast?'),
     el('section', { class: 'karte gebaeude' }, el('h3', {}, 'Nötige Vorlauftemperatur des Hauses'), ...zusammenfassung(erste, projekt)),
     el(

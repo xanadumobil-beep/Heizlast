@@ -78,6 +78,11 @@ export function validiereEinstellungen(e) {
     ...zahl('heizkoerperExponent', e.heizkoerperExponent, {
       name: 'Heizkörperexponent', fehlerWennKleinerGleich: 0, warnWennUeber: 1.6, warnWennUnter: 1,
     }),
+    // Ziel-Vorlauf und Sperrzeit stehen erst seit dem Formular „Rechenannahmen“ in der Prüfung. Fehlt das Feld ganz, bleibt es unbeachtet.
+    ...('zielVorlauf' in e ? zahl('zielVorlauf', e.zielVorlauf, { name: 'Ziel-Vorlauftemperatur', einheit: '°C', fehlerWennKleiner: 25, warnWennUeber: 60 }).concat(e.zielVorlauf > 75 ? [fehler('zielVorlauf', 'Ziel-Vorlauftemperatur: höchstens 75 °C.')] : []) : []),
+    ...(e.waermepumpe?.sperrstunden === null || e.waermepumpe?.sperrstunden === undefined ? []
+      : zahl('waermepumpe.sperrstunden', e.waermepumpe.sperrstunden, { name: 'Sperrzeit', einheit: 'h pro Tag', fehlerWennKleiner: 0 })
+        .concat(e.waermepumpe.sperrstunden >= 24 ? [fehler('waermepumpe.sperrstunden', 'Sperrzeit: muss unter 24 h pro Tag liegen.')] : [])),
   ];
 }
 

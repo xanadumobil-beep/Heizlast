@@ -291,7 +291,7 @@ export async function renderVerbrauchListe(container, neuLaden) {
           },
         }, 'Kopieren'),
         el('button', {
-          type: 'button', class: 'gefahr',
+          type: 'button', class: 'gefahr loeschen',
           onClick: async () => {
             if (!confirm(`Verbrauchsabgleich „${doc.name}“ löschen?`)) return;
             await db.loesche('consumption', doc.id);
@@ -304,7 +304,7 @@ export async function renderVerbrauchListe(container, neuLaden) {
 
   ersetzeKinder(
     container,
-    el('div', { class: 'kopf' }, el('h2', {}, 'Verbrauch'), el('a', { class: 'knopf primaer', href: '#verbrauch/neu' }, '+ Abgleich')),
+    el('div', { class: 'kopf' }, el('h2', {}, 'Verbrauchsabgleich'), el('a', { class: 'knopf primaer', href: '#verbrauch/neu' }, '+ Abgleich')),
     el(
       'p', { class: 'beschreibung' },
       'Plausibilitätsprüfung der berechneten Heizlast anhand des Gas- und Holzverbrauchs einer Heizperiode.',

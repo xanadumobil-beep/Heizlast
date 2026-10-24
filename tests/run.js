@@ -9,6 +9,7 @@ import './bericht.test.js';
 import './plan.test.js';
 import './szenario.test.js';
 import './ergebnis.test.js';
+import './navigation.test.js';
 import './foto.test.js';
 import './offline.test.js';
 import { alleTestsAusfuehren } from './runner.js';

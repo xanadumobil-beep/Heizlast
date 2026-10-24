@@ -267,7 +267,7 @@ function flaechenKarte(projekt, raum, flaeche, ergebnisRaum, neuLaden) {
           el('button', { type: 'button', class: 'klein', onClick: () => bearbeiteOeffnung(projekt, flaeche, index, neuLaden) }, 'Bearbeiten'),
           o.id ? fotoMarkenZeile(projekt, 'oeffnung', o.id) : null,
           el('button', {
-            type: 'button', class: 'klein gefahr',
+            type: 'button', class: 'klein gefahr loeschen',
             onClick: async () => {
               if (!confirm('Diese Öffnung löschen?')) return;
               await db.speichere('surfaces', { ...flaeche, oeffnungen: oeffnungen.filter((_, i) => i !== index) });
@@ -293,7 +293,7 @@ function flaechenKarte(projekt, raum, flaeche, ergebnisRaum, neuLaden) {
         }, neuLaden),
       }, 'Kopieren'),
       el('button', {
-        type: 'button', class: 'gefahr',
+        type: 'button', class: 'gefahr loeschen',
         onClick: async () => {
           if (!confirm(`Raumfläche „${flaechenBezeichnung(projekt, flaeche)}“ löschen?`)) return;
           await db.loesche('surfaces', flaeche.id);
@@ -387,7 +387,7 @@ function raumKarte(projekt, ergebnis, raum, neuLaden, raumMeldungen = []) {
       'div', { class: 'knopfzeile' },
       el('a', { class: 'knopf primaer', href: `#raum/${raum.id}` }, 'Flächen & Details'),
       el('button', { type: 'button', onClick: () => bearbeiteRaum(projekt, raum, neuLaden) }, 'Bearbeiten'),
-      el('button', { type: 'button', class: 'gefahr', onClick: () => loescheRaum(projekt, raum, neuLaden) }, 'Löschen'),
+      el('button', { type: 'button', class: 'gefahr loeschen', onClick: () => loescheRaum(projekt, raum, neuLaden) }, 'Löschen'),
     ),
   );
 }

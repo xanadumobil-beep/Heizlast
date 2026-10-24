@@ -103,7 +103,7 @@ function szenarioKarte(ist, szenario, aktiv, neuLaden) {
       }, 'Umbenennen'),
       el('button', {
         type: 'button',
-        class: 'gefahr',
+        class: 'gefahr loeschen',
         onClick: async () => {
           if (!confirm(`Szenario „${szenario.name}“ löschen? Der Ist-Zustand bleibt unverändert.`)) return;
           if (istAktiv) await setzeAktivesSzenario(null);

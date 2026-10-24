@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node tests/run.js",
-    "sw": "node tools/sw-aktualisieren.js"
+    "sw": "node tools/sw-aktualisieren.js",
+    "e2e": "node tests/e2e/navigation.e2e.cjs"
   }
 }

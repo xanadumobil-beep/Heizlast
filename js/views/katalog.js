@@ -17,7 +17,7 @@ export const KATALOGE = {
     objekt: 'Zone',
     beschreibung:
       'Angrenzende Bereiche mit einer Temperatur als Minimum und Maximum: Erdreich, unbeheizte Kellerräume, Nachbargebäude. '
-      + 'Außenluft ist keine Zone, sie folgt der Normaußentemperatur in den Einstellungen. '
+      + 'Außenluft ist keine Zone, sie folgt der Normaußentemperatur in den Rechenannahmen. '
       + 'Passiv mitbeheizte Räume legst du unter „Räume“ an.',
     felder: ZONEN_FELDER,
     neu: neueZone,
@@ -92,7 +92,7 @@ export async function renderKatalog(container, katalog, neuLaden) {
           type: 'button',
           onClick: () => bearbeiten({ ...eintrag, id: undefined, name: `${eintrag.name} (Kopie)` }),
         }, 'Kopieren'),
-        el('button', { type: 'button', class: 'gefahr', onClick: () => loeschen(eintrag) }, 'Löschen'),
+        el('button', { type: 'button', class: 'gefahr loeschen', onClick: () => loeschen(eintrag) }, 'Löschen'),
       ),
     );
   });

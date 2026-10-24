@@ -1,4 +1,4 @@
-// Projekt-Einstellungen und Status des dauerhaften Speichers.
+// Rechenannahmen (Projekt-Einstellungen für die Berechnung) und App (Version, App-Speicher, dauerhafter Speicher).
 
 import * as db from '../db.js';
 import { el, ersetzeKinder, baueFormular } from '../ui.js';
@@ -91,7 +91,7 @@ async function baueVersionBlock() {
   return block;
 }
 
-export async function renderEinstellungen(container) {
+export async function renderRechenannahmen(container) {
   const einstellungen = await db.ladeEinstellungen();
   const rueckmeldung = el('p', { class: 'ok', 'aria-live': 'polite' });
   let bestaetigt = false;
@@ -120,11 +120,19 @@ export async function renderEinstellungen(container) {
   });
 
   ersetzeKinder(container, 
-    el('div', { class: 'kopf' }, el('h2', {}, 'Einstellungen')),
-    el('p', { class: 'beschreibung' }, 'Projektweite Annahmen für die Berechnung. Zahlen mit Komma eingeben, zum Beispiel 0,15.'),
+    el('div', { class: 'kopf' }, el('h2', {}, 'Rechenannahmen')),
+    el('p', { class: 'beschreibung' }, 'Projektname und alle Annahmen, die die Berechnung beeinflussen. Zahlen mit Komma eingeben, zum Beispiel 0,15.'),
     formular.element,
     el('div', { class: 'knopfzeile' }, speichernKnopf, rueckmeldung),
-    await baueSpeicherBlock(),
+  );
+}
+
+export async function renderApp(container) {
+  ersetzeKinder(
+    container,
+    el('div', { class: 'kopf' }, el('h2', {}, 'App')),
+    el('p', { class: 'beschreibung' }, 'Version und Updates der App, Offline-Speicher und dauerhafter Speicher des Browsers.'),
     await baueVersionBlock(),
+    await baueSpeicherBlock(),
   );
 }
