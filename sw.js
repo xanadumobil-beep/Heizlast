@@ -3,7 +3,7 @@
 // Eine neue Version (geänderte VERSION) ersetzt den alten Speicher vollständig.
 
 // --- erzeugt von tools/sw-aktualisieren.js, nicht von Hand ändern ---
-const VERSION = '9f5f4bef8c';
+const VERSION = 'd5018c1c7f';
 const DATEIEN = [
   "./",
   "css/print.css",

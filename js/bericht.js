@@ -169,7 +169,7 @@ function raeumeAbschnitt(ctx) {
     const passiv = r.status === 'passiv';
     return [
       ...basis,
-      passiv ? `${wattBereich(erg.guenstig.netto, erg.ungunstig.netto)} (Netto-Verlust)` : wattBereich(erg.guenstig.heizlast, erg.ungunstig.heizlast),
+      passiv ? `${wattBereich(erg.guenstig.netto, erg.ungunstig.netto)} (netto)` : wattBereich(erg.guenstig.heizlast, erg.ungunstig.heizlast),
       watt(passiv ? erg.mittel.netto : erg.mittel.heizlast),
       wattBereich(erg.guenstig.raumZuRaumSumme, erg.ungunstig.raumZuRaumSumme),
       passiv ? '' : wattBereich(erg.guenstig.zugeteilt, erg.ungunstig.zugeteilt),

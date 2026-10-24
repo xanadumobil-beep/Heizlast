@@ -3,6 +3,8 @@
 @page { size: A4; margin: 14mm 12mm 16mm; }
 
 html, body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   background: #fff !important;
   color: #000 !important;
   font-size: 10pt;
@@ -51,7 +53,10 @@ main { max-width: none; margin: 0; padding: 0; }
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-tr, li, dt, dd, .b-box, .b-text { break-inside: avoid; }
+/* Zahlen mit Einheit und Bereiche (z. B. „673 – 1078 W“) nicht umbrechen. */
+.b-tabelle td.r, .b-tabelle th.r { white-space: nowrap; }
+.b-tabelle th.r { white-space: normal; }
+tr, li, dt, dd, .b-box, .b-text { break-inside: avoid; page-break-inside: avoid; }
 
 .b-box { color: #000; background: #fff; border: 1pt solid #000; border-left-width: 4pt; }
 .b-box.fehler { color: #000; background: #fff; }
